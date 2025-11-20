@@ -369,6 +369,125 @@ async fn list_backups(state: State<'_, AppState>) -> Result<Vec<String>, String>
     Ok(all_backups)
 }
 
+/// 收集所有备份文件的完整内容
+#[derive(Serialize, Deserialize, Debug)]
+struct BackupData {
+    filename: String,
+    #[serde(rename = "content")]
+    content: serde_json::Value,
+    #[serde(rename = "timestamp")]
+    timestamp: u64,
+}
+
+/// 恢复结果
+#[derive(Serialize, Deserialize, Debug)]
+struct RestoreResult {
+    #[serde(rename = "restoredCount")]
+    restored_count: u32,
+    failed: Vec<FailedBackup>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct FailedBackup {
+    filename: String,
+    error: String,
+}
+
+/// 收集所有备份文件的完整内容
+#[tauri::command]
+async fn collect_backup_contents(state: State<'_, AppState>) -> Result<Vec<BackupData>, String> {
+    let mut backups_with_content = Vec::new();
+
+    // 读取Antigravity账户目录中的JSON文件
+    let antigravity_dir = state.config_dir.join("antigravity-accounts");
+
+    if !antigravity_dir.exists() {
+        return Ok(backups_with_content);
+    }
+
+    for entry in fs::read_dir(&antigravity_dir).map_err(|e| format!("读取用户目录失败: {}", e))? {
+        let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
+        let path = entry.path();
+
+        if path.extension().is_some_and(|ext| ext == "json") {
+            let filename = path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+
+            if filename.is_empty() {
+                continue;
+            }
+
+            match fs::read_to_string(&path)
+                .map_err(|e| format!("读取文件失败 {}: {}", filename, e)) {
+                Ok(content) => {
+                    match serde_json::from_str::<serde_json::Value>(&content) {
+                        Ok(json_value) => {
+                            backups_with_content.push(BackupData {
+                                filename,
+                                content: json_value,
+                                timestamp: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                            });
+                        }
+                        Err(e) => {
+                            println!("⚠️ 跳过损坏的备份文件 {}: {}", filename, e);
+                        }
+                    }
+                }
+                Err(_) => {
+                    println!("⚠️ 跳过无法读取的文件: {}", filename);
+                }
+            }
+        }
+    }
+
+    Ok(backups_with_content)
+}
+
+/// 恢复备份文件到本地
+#[tauri::command]
+async fn restore_backup_files(
+    backups: Vec<BackupData>,
+    state: State<'_, AppState>,
+) -> Result<RestoreResult, String> {
+    let mut results = RestoreResult {
+        restored_count: 0,
+        failed: Vec::new(),
+    };
+
+    // 获取目标目录
+    let antigravity_dir = state.config_dir.join("antigravity-accounts");
+
+    // 确保目录存在
+    if let Err(e) = fs::create_dir_all(&antigravity_dir) {
+        return Err(format!("创建目录失败: {}", e));
+    }
+
+    // 遍历每个备份
+    for backup in backups {
+        let file_path = antigravity_dir.join(&backup.filename);
+
+        match fs::write(&file_path, serde_json::to_string_pretty(&backup.content).unwrap_or_default())
+            .map_err(|e| format!("写入文件失败: {}", e)) {
+            Ok(_) => {
+                results.restored_count += 1;
+            }
+            Err(e) => {
+                results.failed.push(FailedBackup {
+                    filename: backup.filename,
+                    error: e,
+                });
+            }
+        }
+    }
+
+    Ok(results)
+}
+
 #[tauri::command]
 async fn delete_backup(
     name: String,
@@ -577,9 +696,15 @@ async fn load_window_state() -> Result<WindowState, String> {
 #[tauri::command]
 async fn enable_system_tray() -> Result<String, String> {
     if let Some(manager) = system_tray::SystemTrayManager::get_global() {
-        match manager.lock().unwrap().enable() {
-            Ok(_) => Ok("系统托盘功能已启用".to_string()),
-            Err(e) => Err(format!("启用系统托盘失败: {}", e))
+        // 安全的锁获取，避免毒化锁 panic
+        match manager.lock() {
+            Ok(mut manager) => {
+                match manager.enable() {
+                    Ok(_) => Ok("系统托盘功能已启用".to_string()),
+                    Err(e) => Err(format!("启用系统托盘失败: {}", e))
+                }
+            }
+            Err(_) => Err("系统托盘管理器不可用（可能正在维护中）".to_string())
         }
     } else {
         Err("系统托盘未初始化".to_string())
@@ -589,9 +714,15 @@ async fn enable_system_tray() -> Result<String, String> {
 #[tauri::command]
 async fn disable_system_tray() -> Result<String, String> {
     if let Some(manager) = system_tray::SystemTrayManager::get_global() {
-        match manager.lock().unwrap().disable() {
-            Ok(_) => Ok("系统托盘功能已禁用".to_string()),
-            Err(e) => Err(format!("禁用系统托盘失败: {}", e))
+        // 安全的锁获取，避免毒化锁 panic
+        match manager.lock() {
+            Ok(mut manager) => {
+                match manager.disable() {
+                    Ok(_) => Ok("系统托盘功能已禁用".to_string()),
+                    Err(e) => Err(format!("禁用系统托盘失败: {}", e))
+                }
+            }
+            Err(_) => Err("系统托盘管理器不可用（可能正在维护中）".to_string())
         }
     } else {
         Err("系统托盘未初始化".to_string())
@@ -601,10 +732,15 @@ async fn disable_system_tray() -> Result<String, String> {
 #[tauri::command]
 async fn minimize_to_tray() -> Result<String, String> {
     if let Some(manager) = system_tray::SystemTrayManager::get_global() {
-        let manager = manager.lock().unwrap();
-        match manager.minimize_to_tray() {
-            Ok(_) => Ok("窗口已最小化到系统托盘".to_string()),
-            Err(e) => Err(format!("最小化到托盘失败: {}", e))
+        // 使用可变锁获取，避免死锁
+        match manager.lock() {
+            Ok(mut manager) => {
+                match manager.minimize_to_tray() {
+                    Ok(_) => Ok("窗口已最小化到系统托盘".to_string()),
+                    Err(e) => Err(format!("最小化到托盘失败: {}", e))
+                }
+            }
+            Err(_) => Err("系统托盘管理器不可用（可能正在维护中）".to_string())
         }
     } else {
         Err("系统托盘未初始化".to_string())
@@ -614,10 +750,15 @@ async fn minimize_to_tray() -> Result<String, String> {
 #[tauri::command]
 async fn restore_from_tray() -> Result<String, String> {
     if let Some(manager) = system_tray::SystemTrayManager::get_global() {
-        let manager = manager.lock().unwrap();
-        match manager.restore_from_tray() {
-            Ok(_) => Ok("窗口已从系统托盘恢复".to_string()),
-            Err(e) => Err(format!("从托盘恢复失败: {}", e))
+        // 使用可变锁获取，避免死锁
+        match manager.lock() {
+            Ok(mut manager) => {
+                match manager.restore_from_tray() {
+                    Ok(_) => Ok("窗口已从系统托盘恢复".to_string()),
+                    Err(e) => Err(format!("从托盘恢复失败: {}", e))
+                }
+            }
+            Err(_) => Err("系统托盘管理器不可用（可能正在维护中）".to_string())
         }
     } else {
         Err("系统托盘未初始化".to_string())
@@ -627,7 +768,15 @@ async fn restore_from_tray() -> Result<String, String> {
 #[tauri::command]
 async fn is_system_tray_enabled() -> Result<bool, String> {
     if let Some(manager) = system_tray::SystemTrayManager::get_global() {
-        Ok(manager.lock().unwrap().is_enabled())
+        // 安全的锁获取，避免毒化锁 panic
+        match manager.lock() {
+            Ok(manager) => Ok(manager.is_enabled()),
+            Err(_) => {
+                // 锁中毒时返回默认值，但记录错误
+                eprintln!("⚠️ 系统托盘管理器锁中毒，返回默认状态");
+                Ok(false)
+            }
+        }
     } else {
         Ok(false)
     }
@@ -876,6 +1025,8 @@ fn main() {
             backup_profile,
             restore_profile,
             list_backups,
+            collect_backup_contents,
+            restore_backup_files,
             delete_backup,
             clear_all_backups,
             // Antigravity 相关命令

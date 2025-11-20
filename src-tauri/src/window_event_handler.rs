@@ -20,37 +20,60 @@ pub fn init_window_event_handler(app: &tauri::App) -> Result<(), Box<dyn std::er
     let window_clone = main_window.clone();
     let is_restoring_clone = is_restoring.clone();
     tauri::async_runtime::spawn(async move {
-        if let Ok(saved_state) = load_window_state().await {
-            println!("🔄 恢复窗口状态: 位置({:.1}, {:.1}), 大小({:.1}x{:.1}), 最大化:{}",
-                     saved_state.x, saved_state.y, saved_state.width, saved_state.height, saved_state.maximized);
+        match load_window_state().await {
+            Ok(saved_state) => {
+                println!("🔄 恢复窗口状态: 位置({:.1}, {:.1}), 大小({:.1}x{:.1}), 最大化:{}",
+                         saved_state.x, saved_state.y, saved_state.width, saved_state.height, saved_state.maximized);
 
-            // 设置窗口位置和大小
-            let _ = window_clone.set_position(tauri::Position::Physical(
-                tauri::PhysicalPosition {
-                    x: saved_state.x as i32,
-                    y: saved_state.y as i32,
+                // 设置窗口位置
+                if let Err(e) = window_clone.set_position(tauri::Position::Physical(
+                    tauri::PhysicalPosition {
+                        x: saved_state.x as i32,
+                        y: saved_state.y as i32,
+                    }
+                )) {
+                    eprintln!("⚠️ 恢复窗口位置失败: {}，将使用默认位置", e);
                 }
-            ));
 
-            let _ = window_clone.set_size(tauri::Size::Physical(
-                tauri::PhysicalSize {
-                    width: saved_state.width as u32,
-                    height: saved_state.height as u32,
+                // 设置窗口大小
+                if let Err(e) = window_clone.set_size(tauri::Size::Physical(
+                    tauri::PhysicalSize {
+                        width: saved_state.width as u32,
+                        height: saved_state.height as u32,
+                    }
+                )) {
+                    eprintln!("⚠️ 恢复窗口大小失败: {}，将使用默认大小", e);
                 }
-            ));
 
-            // 如果之前是最大化状态，则恢复最大化
-            if saved_state.maximized {
-                let _ = window_clone.maximize();
+                // 如果之前是最大化状态，则恢复最大化
+                if saved_state.maximized {
+                    if let Err(e) = window_clone.maximize() {
+                        eprintln!("⚠️ 恢复窗口最大化状态失败: {}", e);
+                    } else {
+                        println!("✅ 窗口状态恢复完成（包含最大化）");
+                    }
+                } else {
+                    println!("✅ 窗口状态恢复完成");
+                }
             }
-
-            println!("✅ 窗口状态恢复完成");
+            Err(e) => {
+                eprintln!("⚠️ 加载窗口状态失败: {}，将使用默认状态", e);
+                println!("✅ 使用默认窗口状态");
+            }
         }
 
         // 恢复完成后，等待一小段时间确保所有窗口事件都处理完毕，然后清除恢复标志
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        *is_restoring_clone.lock().unwrap() = false;
-        println!("✅ 窗口状态恢复标志已清除，开始响应窗口变化事件");
+        // 安全的锁获取，避免毒化锁 panic
+        match is_restoring_clone.lock() {
+            Ok(mut flag) => {
+                *flag = false;
+                println!("✅ 窗口状态恢复标志已清除，开始响应窗口变化事件");
+            }
+            Err(_) => {
+                eprintln!("⚠️ 恢复标志锁中毒，无法清除标志");
+            }
+        }
     });
 
     // 监听窗口事件，包括大小变化、移动和关闭
@@ -68,9 +91,15 @@ pub fn init_window_event_handler(app: &tauri::App) -> Result<(), Box<dyn std::er
                 tauri::async_runtime::spawn(async move {
                     // 检查是否正在恢复状态，如果是则跳过保存
                     {
-                        let is_restoring_flag = restoring.lock().unwrap();
-                        if *is_restoring_flag {
-                            return;
+                        match restoring.lock() {
+                            Ok(is_restoring_flag) => {
+                                if *is_restoring_flag {
+                                    return;
+                                }
+                            }
+                            Err(_) => {
+                                eprintln!("⚠️ 恢复标志锁中毒，继续执行保存操作");
+                            }
                         }
                     }
 
@@ -94,9 +123,15 @@ pub fn init_window_event_handler(app: &tauri::App) -> Result<(), Box<dyn std::er
                 tauri::async_runtime::spawn(async move {
                     // 检查是否正在恢复状态，如果是则跳过保存
                     {
-                        let is_restoring_flag = restoring.lock().unwrap();
-                        if *is_restoring_flag {
-                            return;
+                        match restoring.lock() {
+                            Ok(is_restoring_flag) => {
+                                if *is_restoring_flag {
+                                    return;
+                                }
+                            }
+                            Err(_) => {
+                                eprintln!("⚠️ 恢复标志锁中毒，继续执行保存操作");
+                            }
                         }
                     }
 
@@ -120,23 +155,37 @@ pub fn init_window_event_handler(app: &tauri::App) -> Result<(), Box<dyn std::er
 
                 // 检查系统托盘是否启用
                 if let Some(manager) = crate::system_tray::SystemTrayManager::get_global() {
-                    if manager.lock().unwrap().is_enabled() {
-                        println!("📋 系统托盘已启用，阻止关闭并最小化到托盘");
+                    match manager.lock() {
+                        Ok(manager) => {
+                            if manager.is_enabled() {
+                                println!("📋 系统托盘已启用，阻止关闭并最小化到托盘");
 
-                        // 阻止窗口关闭
-                        api.prevent_close();
+                                // 阻止窗口关闭
+                                api.prevent_close();
 
-                        // 最小化到系统托盘
-                        let window = window_for_events.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = window.hide();
-                            if let Some(manager) = crate::system_tray::SystemTrayManager::get_global() {
-                                if let Err(e) = manager.lock().unwrap().minimize_to_tray() {
-                                    eprintln!("最小化到托盘失败: {}", e);
-                                }
+                                // 最小化到系统托盘 - 使用 std::thread::spawn 避免异步锁竞争
+                                let _window = window_for_events.clone();
+                                std::thread::spawn(move || {
+                                    // 在新线程中同步调用，避免异步上下文中的锁竞争
+                                    if let Some(manager) = crate::system_tray::SystemTrayManager::get_global() {
+                                        match manager.lock() {
+                                            Ok(mut manager) => {
+                                                if let Err(e) = manager.minimize_to_tray() {
+                                                    eprintln!("最小化到托盘失败: {}", e);
+                                                }
+                                            }
+                                            Err(_) => {
+                                                eprintln!("⚠️ 系统托盘管理器锁中毒，无法最小化到托盘");
+                                            }
+                                        }
+                                    }
+                                });
+                                return;
                             }
-                        });
-                        return;
+                        }
+                        Err(_) => {
+                            eprintln!("⚠️ 系统托盘管理器锁中毒，无法检查托盘状态");
+                        }
                     }
                 }
 
