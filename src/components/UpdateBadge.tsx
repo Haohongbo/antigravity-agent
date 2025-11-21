@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Loader2, RotateCw, Sparkles } from 'lucide-react';
+import { Download, RotateCw, Sparkles } from 'lucide-react';
 import { UpdateState, DownloadProgress } from '../services/updateService';
 
 interface UpdateBadgeProps {
