@@ -28,9 +28,9 @@ jobs:
             arch: x86_64
             runs-on: macos-13
             target: x86_64-apple-darwin
-          - platform: ubuntu-20.04
+          - platform: ubuntu-latest
             arch: x86_64
-            runs-on: ubuntu-20.04
+            runs-on: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - platform: windows-latest
             arch: x86_64
@@ -46,7 +46,7 @@ jobs:
           ref: dev
 
       - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-20.04'
+        if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
