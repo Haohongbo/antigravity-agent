@@ -17,6 +17,8 @@ import { TooltipProvider } from './components/ui/tooltip';
 import { AntigravityPathService } from './services/antigravity-path-service';
 import { exit } from '@tauri-apps/plugin-process';
 import type { AntigravityAccount } from './commands/types/account.types';
+import {useLanguageServerState} from "@/hooks/use-language-server-state.ts";
+import { logger } from './utils/logger';
 
 interface Status {
   message: string;
@@ -35,6 +37,7 @@ function AppContent() {
   const [isPathDialogOpen, setIsPathDialogOpen] = useState(false);
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AntigravityAccount | null>(null);
+  const languageServerState = useLanguageServerState();
 
   // ========== Hook 集成 ==========
   useDevToolsShortcut();
@@ -65,12 +68,21 @@ function AppContent() {
   }, []);
 
   // 启动 Antigravity 进程状态自动检查
-  const { startAutoCheck, stopAutoCheck } = useAntigravityIsRunning();
+  const { startAutoCheck, stopAutoCheck, isRunning } = useAntigravityIsRunning();
 
   useEffect(() => {
     startAutoCheck();
     return () => stopAutoCheck();
   }, []);
+
+  // 处理语言服务的状态
+  useEffect(() => {
+    if (isRunning) {
+      languageServerState.initializeLanguageServerState()
+    } else {
+      languageServerState.clearLanguageServerState()
+    }
+  }, [isRunning]);
 
   // 配置管理
   const { isImporting, isExporting, isCheckingData, importConfig, exportConfig } = useConfigManager(
@@ -86,7 +98,10 @@ function AppContent() {
   // ========== 初始化启动流程 ==========
   const initializeApp = useCallback(async () => {
     try {
-      console.log('🔍 开始检测 Antigravity 安装...');
+      logger.info('开始检测 Antigravity 安装', {
+        module: 'AppState',
+        action: 'detect_antigravity'
+      });
 
       // 检测数据库路径和可执行文件
       const [pathInfo, execInfo] = await Promise.all([
@@ -97,15 +112,29 @@ function AppContent() {
       const bothFound = pathInfo.found && execInfo.found;
 
       if (bothFound) {
-        console.log('✅ Antigravity 检测成功');
+        logger.info('Antigravity 检测成功', {
+          module: 'AppState',
+          action: 'detect_success',
+          pathFound: pathInfo.found,
+          execFound: execInfo.found
+        });
         setIsDetecting(false);
       } else {
-        console.log('⚠️ Antigravity 未找到，显示路径选择');
+        logger.warn('Antigravity 未找到，显示路径选择', {
+          module: 'AppState',
+          action: 'detect_failed',
+          pathFound: pathInfo.found,
+          execFound: execInfo.found
+        });
         setIsDetecting(false);
         setIsPathDialogOpen(true);
       }
     } catch (error) {
-      console.error('启动检测失败:', error);
+      logger.error('启动检测失败', {
+        module: 'AppState',
+        action: 'detect_error',
+        error: error instanceof Error ? error.message : String(error)
+      });
       setIsDetecting(false);
       setIsPathDialogOpen(true);
     }
@@ -120,9 +149,17 @@ function AppContent() {
 
   const handlePathDialogCancel = useCallback(async () => {
     try {
+      logger.info('用户取消路径选择，退出应用', {
+        module: 'AppState',
+        action: 'exit_app'
+      });
       await exit(0);
     } catch (error) {
-      console.error('退出应用失败:', error);
+      logger.error('退出应用失败', {
+        module: 'AppState',
+        action: 'exit_error',
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   }, []);
 

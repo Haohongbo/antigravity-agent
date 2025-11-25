@@ -37,6 +37,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 walkdir = "2.5"
 anyhow = "1"
 read-process-memory = "0.1"
+moka = { version = "0.12", features = ["future"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Threading"] }

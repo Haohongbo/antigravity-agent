@@ -1,220 +1,54 @@
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::time::Duration;
 
-use super::utils::{find_latest_antigravity_log, parse_ports_from_log, find_csrf_token_from_memory};
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Root {
-    #[serde(default)]
-    user_status: Option<UserStatus>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct UserStatus {
-    #[serde(default)]
-    disable_telemetry: bool,
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    email: String,
-    #[serde(default)]
-    plan_status: Option<PlanStatus>,
-    #[serde(default)]
-    cascade_model_config_data: Option<CascadeModelConfigData>,
-    #[serde(default)]
-    accepted_latest_terms_of_service: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PlanStatus {
-    #[serde(default)]
-    plan_info: Option<PlanInfo>,
-    #[serde(default)]
-    available_prompt_credits: i64,
-    #[serde(default)]
-    available_flow_credits: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PlanInfo {
-    #[serde(default)]
-    teams_tier: String,
-    #[serde(default)]
-    plan_name: String,
-    #[serde(default)]
-    has_autocomplete_fast_mode: bool,
-    #[serde(default)]
-    allow_sticky_premium_models: bool,
-    #[serde(default)]
-    allow_premium_command_models: bool,
-    #[serde(default)]
-    has_tab_to_jump: bool,
-    #[serde(default)]
-    max_num_premium_chat_messages: String,
-    #[serde(default)]
-    max_num_chat_input_tokens: String,
-    #[serde(default)]
-    max_custom_chat_instruction_characters: String,
-    #[serde(default)]
-    max_num_pinned_context_items: String,
-    #[serde(default)]
-    max_local_index_size: String,
-    #[serde(default)]
-    monthly_prompt_credits: i64,
-    #[serde(default)]
-    monthly_flow_credits: i64,
-    #[serde(default)]
-    monthly_flex_credit_purchase_amount: i64,
-    #[serde(default)]
-    can_buy_more_credits: bool,
-    #[serde(default)]
-    cascade_web_search_enabled: bool,
-    #[serde(default)]
-    can_customize_app_icon: bool,
-    #[serde(default)]
-    cascade_can_auto_run_commands: bool,
-    #[serde(default)]
-    can_generate_commit_messages: bool,
-    #[serde(default)]
-    knowledge_base_enabled: bool,
-    #[serde(default)]
-    default_team_config: Option<DefaultTeamConfig>,
-    #[serde(default)]
-    can_allow_cascade_in_background: bool,
-    #[serde(default)]
-    browser_enabled: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DefaultTeamConfig {
-    #[serde(default)]
-    allow_mcp_servers: bool,
-    #[serde(default)]
-    allow_auto_run_commands: bool,
-    #[serde(default)]
-    allow_browser_experimental_features: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CascadeModelConfigData {
-    #[serde(default)]
-    client_model_configs: Vec<ClientModelConfig>,
-    #[serde(default)]
-    client_model_sorts: Vec<ClientModelSort>,
-    #[serde(default)]
-    default_override_model_config: Option<DefaultOverrideModelConfig>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ClientModelConfig {
-    #[serde(default)]
-    label: String,
-    #[serde(default)]
-    model_or_alias: Option<ModelOrAlias>,
-    #[serde(default)]
-    supports_images: Option<bool>,
-    #[serde(default)]
-    is_recommended: bool,
-    #[serde(default)]
-    allowed_tiers: Vec<String>,
-    #[serde(default)]
-    quota_info: Option<QuotaInfo>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ModelOrAlias {
-    #[serde(default)]
-    model: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct QuotaInfo {
-    #[serde(default)]
-    remaining_fraction: f64,
-    #[serde(default)]
-    reset_time: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ClientModelSort {
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    groups: Vec<Group>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Group {
-    #[serde(default)]
-    model_labels: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DefaultOverrideModelConfig {
-    #[serde(default)]
-    model_or_alias: Option<ModelOrAlias>,
-}
+use super::cache::{get_csrf_token, get_ports, clear_all, get_stats};
+use super::types::{
+    RequestMetadata, UserStatusRequest, HttpConfig, CacheInitResult
+};
+use super::utils::initialize_cache;
 
 /// 前端调用 GetUserStatus 的公开命令
 #[tauri::command]
 pub async fn language_server_get_user_status(
     api_key: String,
 ) -> Result<serde_json::Value, String> {
+
     if api_key.trim().is_empty() {
         return Err("apiKey 不能为空".to_string());
     }
 
-    // 1) 解析日志拿 HTTPS 端口
-    let log_path = find_latest_antigravity_log()
-        .ok_or_else(|| "未找到 Antigravity.log，无法确定端口".to_string())?;
-    let content = std::fs::read_to_string(&log_path)
-        .map_err(|e| format!("读取日志失败: {e}"))?;
-    let (https_port, _, _) = parse_ports_from_log(&content);
-    let port = https_port.ok_or_else(|| "日志中未找到 HTTPS 端口".to_string())?;
+    // 1) 获取端口信息
+    let port_info = get_ports().await
+        .map_err(|e| format!("获取端口信息失败: {e}"))?;
+    let port = port_info.https_port
+        .ok_or_else(|| "端口信息中未找到 HTTPS 端口".to_string())?;
 
-    // 2) 构造固定 URL/路径/请求体
+    // 2) 构造 URL 和请求体
     let target_url = format!(
         "https://127.0.0.1:{}/exa.language_server_pb.LanguageServerService/GetUserStatus",
         port
     );
 
+    let http_config = HttpConfig::default();
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
-        .timeout(Duration::from_millis(4000))
+        .timeout(Duration::from_millis(http_config.request_timeout_ms))
         .build()
         .map_err(|e| format!("构建 HTTP 客户端失败: {e}"))?;
 
-    let body = json!({
-        "metadata": {
-            "ideName": "antigravity",
-            "apiKey": api_key,
-            "locale": "en",
-            "ideVersion": "1.11.5",
-            "extensionName": "antigravity"
-        }
-    });
-    let body_bytes = serde_json::to_vec(&body)
+    let metadata = RequestMetadata {
+        api_key,
+        ..Default::default()
+    };
+
+    let request_body = UserStatusRequest { metadata };
+    let body_bytes = serde_json::to_vec(&request_body)
         .map_err(|e| format!("序列化请求体失败: {e}"))?;
 
-    // CSRF token：从运行中的进程内存直接提取
-    let csrf = find_csrf_token_from_memory()
+    // 获取 CSRF token
+    let csrf = get_csrf_token().await
         .map_err(|e| format!("提取 csrf_token 失败: {e}"))?;
-    let mut req = client.post(&target_url);
 
-  println!("csrf token: {csrf}");
+    let mut req = client.post(&target_url);
 
     // 模拟前端请求头
     req = req
@@ -236,11 +70,7 @@ pub async fn language_server_get_user_status(
         target_url = %target_url,
         https_port = port,
         method = "POST",
-        headers = %format!(
-            "accept=*/*; accept-language=en-US; connect-protocol-version=1; content-type=application/json; priority=u=1,i; sec-ch-ua=\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\"; sec-ch-ua-mobile=?0; sec-ch-ua-platform=\"Windows\"; sec-fetch-dest=empty; sec-fetch-mode=cors; sec-fetch-site=cross-site; x-codeium-csrf-token={}",
-            csrf
-        ),
-        body = %String::from_utf8_lossy(&body_bytes),
+        csrf_token = %csrf[..csrf.len().min(8)],
         "language_server_get_user_status request"
     );
 
@@ -255,8 +85,37 @@ pub async fn language_server_get_user_status(
         .await
         .map_err(|e| format!("读取响应失败: {e}"))?;
 
-    let parsed: Root = serde_json::from_slice(&bytes)
-        .map_err(|e| format!("解析响应失败: {e}; body={}", String::from_utf8_lossy(&bytes)))?;
+    // 直接解析为 JSON，不定义复杂的数据结构
+    let json: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("解析 JSON 失败: {e}; body={}", String::from_utf8_lossy(&bytes)))?;
 
-    Ok(serde_json::to_value(parsed).map_err(|e| format!("序列化响应失败: {e}"))?)
+    Ok(json)
+}
+
+
+/// 清空所有缓存命令
+#[tauri::command]
+pub async fn clear_all_cache_command() -> Result<(), String> {
+    tracing::info!("收到清空所有缓存请求");
+    clear_all().await;
+    tracing::info!("所有缓存已清空");
+    Ok(())
+}
+
+/// 获取缓存统计信息命令
+#[tauri::command]
+pub fn get_cache_stats_command() -> Result<super::types::CacheStats, String> {
+    tracing::info!("收到获取缓存统计信息请求");
+    let stats = get_stats();
+    tracing::info!("缓存统计: CSRF={}, 端口={}", stats.csrf_cache_size, stats.ports_cache_size);
+    Ok(stats)
+}
+
+/// 初始化语言服务器缓存（预热）
+#[tauri::command]
+pub async fn initialize_language_server_cache() -> Result<CacheInitResult, String> {
+    tracing::info!("收到语言服务器缓存初始化请求");
+    let result = initialize_cache().await;
+    tracing::info!("缓存初始化完成: {}", result.message);
+    Ok(result)
 }

@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
+import { logger } from '../../utils/logger';
 // AntigravityService 导入移除了，现在使用 user-management store
 
 // 内部类型定义 (不导出)
@@ -79,7 +80,7 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
       showPasswordDialog: (config: PasswordDialogConfig) => void,
       closePasswordDialog: () => void
     ): Promise<void> => {
-      console.log('🔍 [导入] 开始导入配置文件');
+      logger.info('开始导入配置文件', { module: 'ConfigManager' });
 
       try {
         // 选择文件
@@ -99,20 +100,26 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
         });
 
         if (!selected || typeof selected !== 'string') {
-          console.log('❌ [导入] 未选择文件');
+          logger.warn('未选择文件', {
+            module: 'ConfigManager'
+          });
           showStatus('未选择文件', true);
           return;
         }
 
-        console.log('📋 [导入] 选择文件:', selected);
+        logger.info('已选择文件', {
+          module: 'ConfigManager',
+          filePath: selected
+        });
 
         // 读取文件内容
         const fileContentUint8Array = await readFile(selected);
         const fileContent = new TextDecoder().decode(fileContentUint8Array);
 
-
         if (fileContent.length === 0) {
-          console.log('❌ [导入] 文件内容为空');
+          logger.warn('文件内容为空', {
+            module: 'ConfigManager'
+          });
           showStatus('文件内容为空', true);
           return;
         }
@@ -145,7 +152,10 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
                 throw new Error('配置文件格式无效');
               }
 
-              console.log('📋 [导入] 开始恢复备份数据...');
+              logger.info('开始恢复备份数据', {
+                module: 'ConfigManager',
+                backupCount: configData.backups.length
+              });
               showStatus('正在恢复账户数据...');
 
               // ✅ 调用后端恢复备份文件
@@ -158,17 +168,28 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
               });
 
               if (result.failed.length > 0) {
-                console.warn('⚠️ [导入] 部分文件恢复失败:', result.failed);
+                logger.warn('部分文件恢复失败', {
+                  module: 'ConfigManager',
+                  restoredCount: result.restoredCount,
+                  failedCount: result.failed.length,
+                  failedFiles: result.failed
+                });
                 showStatus(`配置文件导入成功，已恢复 ${result.restoredCount} 个账户，${result.failed.length} 个失败`);
               } else {
-                console.log('✅ [导入] 所有文件恢复成功');
+                logger.info('所有文件恢复成功', {
+                  module: 'ConfigManager',
+                  restoredCount: result.restoredCount
+                });
                 showStatus(`配置文件导入成功，已恢复 ${result.restoredCount} 个账户`);
               }
 
             } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              console.error('❌ [导入] 解密失败:', errorMessage);
-              showStatus(`配置文件解密失败: ${errorMessage}`, true);
+              logger.error('解密失败', {
+                module: 'ConfigManager',
+                stage: 'import_password_validation',
+                error: error instanceof Error ? error.message : String(error)
+              });
+              showStatus(`配置文件解密失败: ${error instanceof Error ? error.message : String(error)}`, true);
             } finally {
               set({ isImporting: false });
             }
@@ -176,10 +197,13 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
         });
 
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ [导入] 文件操作失败:', errorMessage);
-        showStatus(`文件操作失败: ${errorMessage}`, true);
-      }
+      logger.error('文件操作失败', {
+        module: 'ConfigManager',
+        stage: 'file_operation',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      showStatus(`文件操作失败: ${error instanceof Error ? error.message : String(error)}`, true);
+    }
     },
 
     // ============ 导出配置 ============
@@ -188,19 +212,26 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
       showPasswordDialog: (config: PasswordDialogConfig) => void,
       closePasswordDialog: () => void
     ): Promise<void> => {
+      logger.info('开始导出配置', { module: 'ConfigManager' });
+
       try {
-        console.log('📋 [导出] 开始收集备份数据...');
         showStatus('正在收集账户数据...');
 
         // ✅ 获取包含完整内容的备份数据
         const backupsWithContent = await invoke<BackupData[]>('collect_backup_contents');
 
         if (backupsWithContent.length === 0) {
+          logger.warn('没有找到用户信息', {
+            module: 'ConfigManager'
+          });
           showStatus('没有找到任何用户信息，无法导出配置文件', true);
           return;
         }
 
-        console.log('📋 [导出] 找到备份数据:', backupsWithContent.length, '个');
+        logger.info('找到备份数据', {
+          module: 'ConfigManager',
+          backupCount: backupsWithContent.length
+        });
 
         // 使用密码对话框获取密码
         showPasswordDialog({
@@ -227,7 +258,13 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
 
               // ✅ 调用后端加密命令（包含 JSON 序列化 + XOR 加密 + Base64 编码）
               const configJson = JSON.stringify(configData, null, 2);
-              console.log('📋 [导出] 配置数据大小:', new Blob([configJson]).size, 'bytes');
+              const configSize = new Blob([configJson]).size;
+
+              logger.info('配置数据已生成', {
+                module: 'ConfigManager',
+                backupCount: backupsWithContent.length,
+                configSize
+              });
 
               const encryptedData = await invoke<string>('encrypt_config_data', {
                 jsonData: configJson,
@@ -250,7 +287,9 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
               });
 
               if (!savePath || typeof savePath !== 'string') {
-                console.log('❌ [导出] 未选择保存位置');
+                logger.warn('未选择保存位置', {
+                  module: 'ConfigManager'
+                });
                 showStatus('未选择保存位置', true);
                 return;
               }
@@ -262,12 +301,20 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
               });
 
               showStatus(`配置文件已保存: ${savePath}`);
-              console.log('✅ [导出] 保存成功:', savePath);
+              logger.info('导出配置成功', {
+                module: 'ConfigManager',
+                savePath,
+                backupCount: backupsWithContent.length,
+                configSize
+              });
 
             } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              console.error('❌ [导出] 导出失败:', errorMessage);
-              showStatus(`导出配置文件失败: ${errorMessage}`, true);
+              logger.error('导出失败', {
+                module: 'ConfigManager',
+                stage: 'password_validation',
+                error: error instanceof Error ? error.message : String(error)
+              });
+              showStatus(`导出配置文件失败: ${error instanceof Error ? error.message : String(error)}`, true);
             } finally {
               set({ isExporting: false });
             }
@@ -275,10 +322,13 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
         });
 
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ [导出] 检查数据失败:', errorMessage);
-        showStatus(`检查数据失败: ${errorMessage}`, true);
-      }
+      logger.error('检查数据失败', {
+        module: 'ConfigManager',
+        stage: 'data_collection',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      showStatus(`检查数据失败: ${error instanceof Error ? error.message : String(error)}`, true);
+    }
     },
   })
 );

@@ -9,6 +9,9 @@ import {
 } from '@/components/base-ui/BaseDialog';
 import { BaseButton } from '@/components/base-ui/BaseButton';
 import { cn } from '@/utils/utils';
+import {AccountCommands} from "@/commands/AccountCommands.ts";
+import {invoke} from "@tauri-apps/api/core";
+import { logger } from '@/utils/logger';
 
 interface BusinessUserDetailProps {
   isOpen: boolean;
@@ -30,7 +33,11 @@ const BusinessUserDetail: React.FC<BusinessUserDetailProps> = ({
       setCopiedField(fieldName);
       setTimeout(() => setCopiedField(null), 2000);
     } catch (error) {
-      console.error('复制失败:', error);
+      logger.error('复制失败', {
+        module: 'UserDetail',
+        action: 'copy_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   };
 

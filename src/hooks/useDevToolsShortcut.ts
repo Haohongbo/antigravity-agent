@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { logger } from '../utils/logger';
 
 /**
  * 开发者工具快捷键 Hook
@@ -23,7 +24,11 @@ export const useDevToolsShortcut = () => {
             });
           }
         } catch (error) {
-          console.error('Failed to toggle devtools:', error);
+          logger.error('Failed to toggle devtools', {
+            module: 'DevToolsShortcut',
+            action: 'toggle_failed',
+            error: error instanceof Error ? error.message : String(error)
+          });
         }
       }
     };

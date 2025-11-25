@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { logger } from '../utils/logger';
 
 /**
  * Antigravity 服务 - 处理 Antigravity 相关操作
@@ -11,19 +12,37 @@ export class AntigravityService {
     onStatusUpdate: (message: string, isError?: boolean) => void
   ): Promise<void> {
     try {
-      console.log('🚀 开始执行备份并重启 Antigravity 流程');
+      logger.info('开始执行备份并重启 Antigravity 流程', {
+        module: 'AntigravityService',
+        action: 'backup_and_restart_start'
+      });
       onStatusUpdate('正在关闭 Antigravity 进程...');
 
-      console.log('📞 调用后端 backup_and_restart_antigravity 命令');
+      logger.info('调用后端 backup_and_restart_antigravity 命令', {
+        module: 'AntigravityService',
+        action: 'call_backend_command'
+      });
       const result = await invoke('backup_and_restart_antigravity') as string;
-      console.log('✅ 后端命令执行成功，结果:', result);
+      logger.info('后端命令执行成功', {
+        module: 'AntigravityService',
+        action: 'backend_command_success',
+        result: result
+      });
 
       onStatusUpdate(result);
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('❌ 备份并重启失败:', errorMessage);
-      console.error('❌ 完整错误对象:', error);
+      logger.error('备份并重启失败', {
+        module: 'AntigravityService',
+        action: 'backup_and_restart_failed',
+        error: errorMessage
+      });
+      logger.error('完整错误对象', {
+        module: 'AntigravityService',
+        action: 'full_error_object',
+        error: error
+      });
       throw new Error(`备份并重启失败: ${errorMessage}`);
     }
   }

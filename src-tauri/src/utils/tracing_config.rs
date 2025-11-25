@@ -115,7 +115,7 @@ pub fn init_tracing(config_dir: &Path) -> Result<(), Box<dyn std::error::Error>>
     // 环境过滤器，默认 info 级别
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| {
-            EnvFilter::new("antigravity_agent=info,tower_http=debug")
+            EnvFilter::new("antigravity-agent=trace")
         });
 
     // 组合多个输出目标
@@ -144,14 +144,25 @@ pub fn init_tracing(config_dir: &Path) -> Result<(), Box<dyn std::error::Error>>
 
 /// 记录系统启动信息
 pub fn log_system_info() {
-    tracing::info!("🚀 启动 Antigravity Agent v{}", env!("CARGO_PKG_VERSION"));
     tracing::info!(
-        "🖥️ 系统信息: {} {}",
-        std::env::consts::OS,
-        std::env::consts::ARCH
+        target: "app::startup",
+        version = env!("CARGO_PKG_VERSION"),
+        "🚀 启动 Antigravity Agent"
     );
-    tracing::info!("📁 配置目录已初始化");
-    tracing::info!("📁 Tracing 日志系统已启用");
+    tracing::info!(
+        target: "app::startup",
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+        "🖥️ 系统信息"
+    );
+    tracing::info!(
+        target: "app::startup",
+        "📁 配置目录已初始化"
+    );
+    tracing::info!(
+        target: "app::startup",
+        "📁 Tracing 日志系统已启用"
+    );
 }
 
 /// 记录数据库操作
@@ -159,27 +170,35 @@ pub fn log_database_operation(operation: &str, table: Option<&str>, success: boo
     match (table, success) {
         (Some(table), true) => {
             tracing::info!(
+                target: "database::operation",
                 operation = operation,
                 table = table,
+                success = true,
                 "🗄️ 数据库操作成功"
             );
         }
         (Some(table), false) => {
             tracing::error!(
+                target: "database::operation",
                 operation = operation,
                 table = table,
+                success = false,
                 "❌ 数据库操作失败"
             );
         }
         (None, true) => {
             tracing::info!(
+                target: "database::operation",
                 operation = operation,
+                success = true,
                 "🗄️ 数据库操作成功"
             );
         }
         (None, false) => {
             tracing::error!(
+                target: "database::operation",
                 operation = operation,
+                success = false,
                 "❌ 数据库操作失败"
             );
         }

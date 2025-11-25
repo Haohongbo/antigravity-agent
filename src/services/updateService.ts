@@ -1,5 +1,6 @@
 import { check, Update, DownloadEvent } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { logger } from '../utils/logger';
 
 export interface UpdateInfo {
     version: string;
@@ -32,7 +33,10 @@ class UpdateService {
             const update = await check();
 
             if (update === null) {
-                console.log('没有可用更新');
+                logger.info('没有可用更新', {
+                module: 'UpdateService',
+                action: 'no_update_available'
+              });
                 return null;
             }
 
@@ -45,7 +49,11 @@ class UpdateService {
                 body: update.body || '暂无更新说明',
             };
         } catch (error) {
-            console.error('检查更新失败:', error);
+            logger.error('检查更新失败', {
+                module: 'UpdateService',
+                action: 'check_failed',
+                error: error
+              });
             throw new Error(`检查更新失败: ${error}`);
         }
     }
@@ -69,25 +77,43 @@ class UpdateService {
                 switch (event.event) {
                     case 'Started':
                         total = event.data.contentLength || 0;
-                        console.log(`开始下载，总大小: ${total} 字节`);
+                        logger.info('开始下载', {
+                        module: 'UpdateService',
+                        action: 'download_started',
+                        totalBytes: total
+                      });
                         onProgress({ downloaded: 0, total, percentage: 0 });
                         break;
 
                     case 'Progress':
                         downloaded += event.data.chunkLength;
                         const percentage = total > 0 ? Math.round((downloaded / total) * 100) : 0;
-                        console.log(`下载进度: ${downloaded}/${total} (${percentage}%)`);
+                        logger.debug('下载进度', {
+                        module: 'UpdateService',
+                        action: 'download_progress',
+                        downloaded,
+                        total,
+                        percentage
+                      });
                         onProgress({ downloaded, total, percentage });
                         break;
 
                     case 'Finished':
-                        console.log('下载完成');
+                        logger.info('下载完成', {
+                        module: 'UpdateService',
+                        action: 'download_completed',
+                        totalBytes: total
+                      });
                         onProgress({ downloaded: total, total, percentage: 100 });
                         break;
                 }
             });
         } catch (error) {
-            console.error('下载更新失败:', error);
+            logger.error('下载更新失败', {
+                module: 'UpdateService',
+                action: 'download_failed',
+                error: error
+              });
             throw new Error(`下载更新失败: ${error}`);
         }
     }
@@ -101,17 +127,27 @@ class UpdateService {
         }
 
         try {
-            console.log('开始安装更新...');
+            logger.info('开始安装更新', {
+                module: 'UpdateService',
+                action: 'install_started'
+              });
             await this.pendingUpdate.install();
 
-            console.log('安装完成，准备重启...');
+            logger.info('安装完成，准备重启', {
+                module: 'UpdateService',
+                action: 'install_completed'
+              });
             // 等待一小段时间确保安装完成
             await new Promise(resolve => setTimeout(resolve, 500));
 
             // 重启应用
             await relaunch();
         } catch (error) {
-            console.error('安装更新失败:', error);
+            logger.error('安装更新失败', {
+                module: 'UpdateService',
+                action: 'install_failed',
+                error: error
+              });
             throw new Error(`安装更新失败: ${error}`);
         }
     }

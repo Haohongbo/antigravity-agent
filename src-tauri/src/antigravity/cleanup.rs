@@ -14,7 +14,7 @@ const DELETE_KEYS: &[&str] = database::DELETE_KEYS;
 
 /// 智能更新 Marker：彻底移除指定的 Key（而非设为0）
 fn remove_keys_from_marker(conn: &Connection, keys_to_remove: &[&str]) -> Result<(), String> {
-    println!("  🔧 正在修正校验标记 (Marker)...");
+    tracing::debug!(target: "cleanup::marker", "正在修正校验标记 (Marker)");
 
     let current_marker_json: Option<String> = conn
         .query_row(
@@ -54,15 +54,15 @@ fn remove_keys_from_marker(conn: &Connection, keys_to_remove: &[&str]) -> Result
         )
         .map_err(|e| format!("写入 Marker 失败: {}", e))?;
 
-        println!("  ✅ 校验标记已清理（完全移除登录相关字段）");
+        tracing::info!(target: "cleanup::marker", "校验标记已清理（完全移除登录相关字段）");
     } else {
-        println!("  ℹ️ 校验标记无需变更");
+        tracing::debug!(target: "cleanup::marker", "校验标记无需变更");
     }
     Ok(())
 }
 
 fn clear_database(db_path: &Path, db_name: &str) -> Result<usize, String> {
-    println!("🔄 正在清理数据库: {}", db_name);
+    tracing::info!(target: "cleanup::database", db_name = %db_name, "开始清理数据库");
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
     let mut count = 0;
@@ -72,21 +72,21 @@ fn clear_database(db_path: &Path, db_name: &str) -> Result<usize, String> {
             .execute("DELETE FROM ItemTable WHERE key = ?", [key])
             .unwrap_or(0);
         if rows > 0 {
-            println!("  ✅ 已删除: {}", key);
+            tracing::debug!(target: "cleanup::database", key = %key, "已删除字段");
             count += 1;
         }
     }
 
     // 2. 同步修改 Marker 清单
     if let Err(e) = remove_keys_from_marker(&conn, DELETE_KEYS) {
-        println!("  ⚠️ Marker 更新警告: {}", e);
+        tracing::warn!(target: "cleanup::marker", error = %e, "Marker 更新警告");
     }
 
     Ok(count)
 }
 
 pub async fn clear_all_antigravity_data() -> Result<String, String> {
-    println!("🗑️ 开始清除 Antigravity 用户认证数据（保留设备指纹）");
+    tracing::info!(target: "cleanup::main", "开始清除 Antigravity 用户认证数据（保留设备指纹）");
 
     let app_data = match platform::get_antigravity_db_path() {
         Some(p) => p,
@@ -109,29 +109,29 @@ pub async fn clear_all_antigravity_data() -> Result<String, String> {
     let mut msg = String::new();
 
     // 清理主库
-    println!("📊 步骤1: 清除 state.vscdb 数据库");
+    tracing::info!(target: "cleanup::main", "步骤1: 清除 state.vscdb 数据库");
     match clear_database(&app_data, "state.vscdb") {
         Ok(c) => {
-            println!("  ✅ 主数据库已清除 {} 项", c);
+            tracing::info!(target: "cleanup::main", cleaned_count = %c, "主数据库已清除");
             msg.push_str(&format!("主库清理 {} 项", c));
         }
         Err(e) => return Err(e),
     }
 
     // 清理备份库
-    println!("💾 步骤2: 清除 state.vscdb.backup");
+    tracing::info!(target: "cleanup::main", "步骤2: 清除 state.vscdb.backup");
     let backup_db = app_data.with_extension("vscdb.backup");
     if backup_db.exists() {
         if let Ok(c) = clear_database(&backup_db, "state.vscdb.backup") {
-            println!("  ✅ 备份数据库已清除 {} 项", c);
+            tracing::info!(target: "cleanup::main", cleaned_count = %c, "备份数据库已清除");
             msg.push_str(&format!("; 备份库清理 {} 项", c));
         }
     } else {
-        println!("  ℹ️ 备份数据库不存在，跳过");
+        tracing::debug!(target: "cleanup::main", "备份数据库不存在，跳过");
     }
 
     // 添加设备指纹保护说明
-    println!("🔒 设备指纹保护: google.antigravity 已保留，避免风控触发");
+    tracing::info!(target: "cleanup::main", "设备指纹保护: google.antigravity 已保留，避免风控触发");
     msg.push_str(" (设备指纹已保留)");
 
     Ok(format!("✅ 登出成功: {}", msg))

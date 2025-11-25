@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { updateService, UpdateInfo, UpdateState, DownloadProgress } from '../services/updateService';
+import { logger } from '../utils/logger';
 
 export interface UseUpdateCheckerResult {
     updateState: UpdateState;
@@ -24,21 +25,35 @@ export function useUpdateChecker(autoCheck: boolean = true): UseUpdateCheckerRes
     const checkForUpdates = useCallback(async () => {
         try {
             setError(null);
-            console.log('正在检查更新...');
+            logger.info('正在检查更新', {
+            module: 'UpdateChecker',
+            action: 'check_start'
+          });
 
             const info = await updateService.checkForUpdates();
 
             if (info) {
-                console.log('发现新版本:', info.version);
+                logger.info('发现新版本', {
+                module: 'UpdateChecker',
+                action: 'update_found',
+                version: info.version
+              });
                 setUpdateInfo(info);
                 setUpdateState('update-available');
             } else {
-                console.log('已是最新版本');
+                logger.info('已是最新版本', {
+                module: 'UpdateChecker',
+                action: 'up_to_date'
+              });
                 setUpdateState('no-update');
             }
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
-            console.error('检查更新失败:', errorMsg);
+            logger.error('检查更新失败', {
+            module: 'UpdateChecker',
+            action: 'check_failed',
+            error: errorMsg
+          });
             setError(errorMsg);
             // 不设置错误状态，保持无更新状态，避免显示错误徽章
             setUpdateState('no-update');
@@ -61,7 +76,11 @@ export function useUpdateChecker(autoCheck: boolean = true): UseUpdateCheckerRes
             setUpdateState('ready-to-install');
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
-            console.error('下载更新失败:', errorMsg);
+            logger.error('下载更新失败', {
+            module: 'UpdateChecker',
+            action: 'download_failed',
+            error: errorMsg
+          });
             setError(errorMsg);
             // 下载失败，恢复到更新可用状态，让用户可以重试
             setUpdateState('update-available');
@@ -78,7 +97,11 @@ export function useUpdateChecker(autoCheck: boolean = true): UseUpdateCheckerRes
             // 如果重启成功，这里的代码不会执行
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
-            console.error('安装更新失败:', errorMsg);
+            logger.error('安装更新失败', {
+            module: 'UpdateChecker',
+            action: 'install_failed',
+            error: errorMsg
+          });
             setError(errorMsg);
             // 安装失败，恢复到准备安装状态，让用户可以重试
             setUpdateState('ready-to-install');

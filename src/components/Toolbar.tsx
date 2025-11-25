@@ -11,6 +11,7 @@ import {useDbMonitoringStore} from "@/modules/db-monitoring-store.ts";
 import {useAntigravityIsRunning} from '@/hooks/useAntigravityIsRunning';
 import { invoke } from '@tauri-apps/api/core';
 import {AccountCommands} from "@/commands/AccountCommands.ts";
+import { logger } from '../utils/logger';
 
 interface LoadingState {
   isProcessLoading: boolean;
@@ -48,8 +49,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
 }) => {
   const {users, addCurrentUser} = useUserManagement();
   const {dbMonitoringEnabled} = useDbMonitoringStore();
-  const [isTestingLS, setIsTestingLS] = useState(false);
-
+  
   // Antigravity 进程状态
   const isRunning = useAntigravityIsRunning((state) => state.isRunning);
   const isCheckingStatus = useAntigravityIsRunning((state) => state.isChecking);
@@ -70,7 +70,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
   
   // 处理登录新账户按钮点击
   const handleBackupAndRestartClick = () => {
-    console.log('🔘 用户点击登录新账户按钮，显示确认对话框');
+    logger.info('用户点击登录新账户按钮，显示确认对话框', {
+      module: 'Toolbar',
+      action: 'backup_and_restart_click'
+    });
 
     setConfirmDialog({
       isOpen: true,
@@ -86,7 +89,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
 登录新账户后点击 "刷新" 即可保存新账户
 注意：系统将自动启动 Antigravity，请确保已保存所有重要工作`,
       onConfirm: async () => {
-        console.log('✅ 用户确认登录新账户操作');
+        logger.info('用户确认登录新账户操作', {
+        module: 'Toolbar',
+        action: 'backup_and_restart_confirmed'
+      });
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         onBackupAndRestart();
       }
@@ -119,7 +125,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
       showStatus('更新包下载完成，点击重启按钮安装', false);
     } catch (error) {
       // 只在控制台打印错误，不提示用户
-      console.error('下载失败:', error);
+      logger.error('下载失败', {
+        module: 'Toolbar',
+        action: 'download_update_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   };
 
@@ -131,7 +141,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
       // 如果成功，应用会重启，这里的代码不会执行
     } catch (error) {
       // 只在控制台打印错误，不提示用户
-      console.error('安装失败:', error);
+      logger.error('安装失败', {
+        module: 'Toolbar',
+        action: 'install_update_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   };
 
@@ -141,29 +155,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
       loadingState.isImporting ||
         loadingState.isExporting;
   }, [loadingState]);
-
-  // 测试语言服务器 GetUserStatus
-  const handleTestLanguageServer = async () => {
-    setIsTestingLS(true);
-    console.log(await AccountCommands.getAccounts())
-    try {
-      const apiKey = window.prompt('请输入语言服务器 apiKey');
-      if (!apiKey || apiKey.trim() === '') {
-        showStatus('apiKey 不能为空', true);
-        setIsTestingLS(false);
-        return;
-      }
-      const result = await invoke('language_server_get_user_status', { apiKey });
-      console.log('[LS Test] language_server_get_user_status result:', result);
-      showStatus('语言服务器调用成功，详情见控制台');
-    } catch (error) {
-      console.error('[LS Test] 调用失败:', error);
-      const msg = error instanceof Error ? error.message : String(error);
-      showStatus(`语言服务器调用失败: ${msg}`, true);
-    } finally {
-      setIsTestingLS(false);
-    }
-  };
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -284,7 +275,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
         description={confirmDialog.description}
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => {
-          console.log('❌ 用户取消了登录新账户操作');
+          logger.info('用户取消了登录新账户操作', {
+        module: 'Toolbar',
+        action: 'backup_and_restart_cancelled'
+      });
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         }}
       />

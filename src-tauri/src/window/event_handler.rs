@@ -21,13 +21,14 @@ pub fn init_window_event_handler(app: &tauri::App) -> Result<(), Box<dyn std::er
     tauri::async_runtime::spawn(async move {
         match load_window_state().await {
             Ok(saved_state) => {
-                println!(
-                    "🔄 恢复窗口状态: 位置({:.1}, {:.1}), 大小({:.1}x{:.1}), 最大化:{}",
-                    saved_state.x,
-                    saved_state.y,
-                    saved_state.width,
-                    saved_state.height,
-                    saved_state.maximized
+                tracing::debug!(
+                    target: "window::restore",
+                    x = %saved_state.x,
+                    y = %saved_state.y,
+                    width = %saved_state.width,
+                    height = %saved_state.height,
+                    maximized = %saved_state.maximized,
+                    "恢复窗口状态"
                 );
 
                 // 设置窗口位置
@@ -37,7 +38,7 @@ pub fn init_window_event_handler(app: &tauri::App) -> Result<(), Box<dyn std::er
                         y: saved_state.y as i32,
                     }))
                 {
-                    eprintln!("⚠️ 恢复窗口位置失败: {}，将使用默认位置", e);
+                    tracing::warn!(target: "window::restore", error = %e, "恢复窗口位置失败，使用默认位置");
                 }
 
                 // 设置窗口大小
@@ -45,7 +46,7 @@ pub fn init_window_event_handler(app: &tauri::App) -> Result<(), Box<dyn std::er
                     width: saved_state.width as u32,
                     height: saved_state.height as u32,
                 })) {
-                    eprintln!("⚠️ 恢复窗口大小失败: {}，将使用默认大小", e);
+                    tracing::warn!(target: "window::restore", error = %e, "恢复窗口大小失败，使用默认大小");
                 }
 
                 // 如果之前是最大化状态，则恢复最大化

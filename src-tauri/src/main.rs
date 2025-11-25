@@ -27,8 +27,15 @@ pub use state::{AppState, ProfileInfo, AntigravityAccount};
 use crate::commands::*;
 
 fn main() {
-    println!("🚀 启动 Antigravity Agent");
-    println!("🔧 [main] 开始初始化应用程序...");
+    // 快速初始化全局 tracing，确保日志能立即显示
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .with_target(false)
+        .compact()
+        .init();
+
+    tracing::info!(target: "app::startup", "启动 Antigravity Agent");
+    tracing::info!(target: "app::startup", "开始初始化应用程序");
 
     // 记录系统启动信息
     crate::utils::tracing_config::log_system_info();
@@ -102,6 +109,9 @@ fn main() {
             write_frontend_log,
             // Antigravity 语言服务器接口
             language_server_get_user_status,
+            clear_all_cache_command,
+            get_cache_stats_command,
+            initialize_language_server_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

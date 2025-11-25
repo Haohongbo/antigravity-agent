@@ -7,7 +7,11 @@
 macro_rules! log_async_command {
     ($command_name:expr, $future:expr) => {{
         let start_time = std::time::Instant::now();
-        tracing::info!("🔧 开始执行命令: {}", $command_name);
+        tracing::info!(
+            target: "command::start",
+            command = $command_name,
+            "🔧 开始执行命令"
+        );
 
         // 直接处理future，避免类型推断问题
         let (result, duration) = match $future.await {
@@ -17,17 +21,23 @@ macro_rules! log_async_command {
                 // 简化错误处理，避免字符串操作的类型推断
                 let error_msg = format!("命令执行失败");
                 tracing::error!(
-                    "❌ 命令失败: {} (耗时: {:?}) - 错误: {}",
-                    $command_name,
-                    duration,
-                    error_msg
+                    target: "command::error",
+                    command = $command_name,
+                    duration_ms = duration.as_millis(),
+                    error = %e,
+                    "❌ 命令失败: {}", error_msg
                 );
                 (Err(e), duration)
             }
         };
 
         if result.is_ok() {
-            tracing::info!("✅ 命令完成: {} (耗时: {:?})", $command_name, duration);
+            tracing::info!(
+                target: "command::success",
+                command = $command_name,
+                duration_ms = duration.as_millis(),
+                "✅ 命令完成"
+            );
         }
 
         result
@@ -41,22 +51,33 @@ macro_rules! log_user_command {
         let start_time = std::time::Instant::now();
         let sanitizer = $crate::utils::log_sanitizer::LogSanitizer::new();
         let masked_email = sanitizer.sanitize_email($user_email);
-        tracing::info!("🔧 用户操作: {} | 用户: {}", $command_name, masked_email);
+        tracing::info!(
+            target: "user_command::start",
+            command = $command_name,
+            user_email = %masked_email,
+            "🔧 用户操作开始"
+        );
 
         match $future.await {
             Ok(result) => {
                 let duration = start_time.elapsed();
-                tracing::info!("✅ 用户操作完成: {} (耗时: {:?})", $command_name, duration);
+                tracing::info!(
+                    target: "user_command::success",
+                    command = $command_name,
+                    duration_ms = duration.as_millis(),
+                    "✅ 用户操作完成"
+                );
                 Ok(result)
             }
             Err(e) => {
                 let duration = start_time.elapsed();
                 let error_msg = format!("用户操作失败");
                 tracing::error!(
-                    "❌ 用户操作失败: {} (耗时: {:?}) - 错误: {}",
-                    $command_name,
-                    duration,
-                    error_msg
+                    target: "user_command::error",
+                    command = $command_name,
+                    duration_ms = duration.as_millis(),
+                    error = %e,
+                    "❌ 用户操作失败: {}", error_msg
                 );
                 Err(e)
             }

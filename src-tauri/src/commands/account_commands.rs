@@ -16,7 +16,7 @@ pub async fn switch_antigravity_account(
     account_id: String,
     _state: State<'_, crate::AppState>,
 ) -> Result<String, String> {
-  tracing::info!("开始切换 Antigravity 账户");
+  tracing::info!(target: "account::switch_legacy", account_id = %account_id, "开始切换 Antigravity 账户");
 
   let start_time = std::time::Instant::now();
 
@@ -452,10 +452,7 @@ pub async fn clear_all_antigravity_data() -> Result<String, String> {
 /// 恢复 Antigravity 账户
 #[tauri::command]
 pub async fn restore_antigravity_account(account_name: String) -> Result<String, String> {
-    println!(
-        "📥 调用 restore_antigravity_account，账户名: {}",
-        account_name
-    );
+    tracing::debug!(target: "account::restore", account_name = %account_name, "调用 restore_antigravity_account");
 
     // 1. 构建备份文件路径
     let config_dir = dirs::config_dir()
@@ -472,25 +469,23 @@ pub async fn restore_antigravity_account(account_name: String) -> Result<String,
 #[tauri::command]
 pub async fn switch_to_antigravity_account(account_name: String) -> Result<String, String> {
     crate::log_async_command!("switch_to_antigravity_account", async {
-        tracing::info!("🔄 开始执行切换到账户: {}", account_name);
-
         // 1. 关闭 Antigravity 进程 (如果存在)
-        println!("🛑 步骤1: 检查并关闭 Antigravity 进程");
         let kill_result = match crate::platform::kill_antigravity_processes() {
             Ok(result) => {
                 if result.contains("not found") || result.contains("未找到") {
-                    println!("ℹ️ Antigravity 进程未运行，跳过关闭步骤");
+                    tracing::debug!(target: "account::switch::step1", "Antigravity 进程未运行，跳过关闭步骤");
                     "Antigravity 进程未运行".to_string()
                 } else {
-                    println!("✅ 进程关闭结果: {}", result);
+                    tracing::debug!(target: "account::switch::step1", result = %result, "进程关闭完成");
                     result
                 }
             }
             Err(e) => {
                 if e.contains("not found") || e.contains("未找到") {
-                    println!("ℹ️ Antigravity 进程未运行，跳过关闭步骤");
+                    tracing::debug!(target: "account::switch::step1", "Antigravity 进程未运行，跳过关闭步骤");
                     "Antigravity 进程未运行".to_string()
                 } else {
+                    tracing::error!(target: "account::switch::step1", error = %e, "关闭进程时发生错误");
                     return Err(format!("关闭进程时发生错误: {}", e));
                 }
             }
@@ -500,29 +495,26 @@ pub async fn switch_to_antigravity_account(account_name: String) -> Result<Strin
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
         // 2. 恢复指定账户到 Antigravity 数据库
-        println!("💾 步骤2: 恢复账户数据: {}", account_name);
         let restore_result = restore_antigravity_account(account_name.clone()).await?;
-        println!("✅ 账户数据恢复完成: {}", restore_result);
+        tracing::debug!(target: "account::switch::step2", result = %restore_result, "账户数据恢复完成");
 
         // 等待一秒确保数据库操作完成
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
         // 3. 重新启动 Antigravity 进程
-        println!("🚀 步骤3: 重新启动 Antigravity");
         let start_result = crate::antigravity::starter::start_antigravity();
         let start_message = match start_result {
             Ok(result) => {
-                println!("✅ 启动结果: {}", result);
+                tracing::debug!(target: "account::switch::step3", result = %result, "Antigravity 启动成功");
                 result
             }
             Err(e) => {
-                println!("⚠️ 启动失败: {}", e);
+                tracing::warn!(target: "account::switch::step3", error = %e, "Antigravity 启动失败");
                 format!("启动失败: {}", e)
             }
         };
 
         let final_message = format!("{} -> {} -> {}", kill_result, restore_result, start_message);
-        tracing::info!("🎉 账户切换完成: {}", final_message);
 
         Ok(final_message)
     })

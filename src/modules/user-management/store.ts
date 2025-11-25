@@ -21,6 +21,8 @@ export const useUserManagement = create<UserStoreState & UserStoreActions>()((se
 
   // ============ 基础操作 ============
   deleteUser: async (email: string): Promise<void> => {
+    logger.info('开始删除用户', { module: 'UserManagement', email });
+
     try {
       // 调用 Tauri 删除命令，与 ManageSection 保持一致
       await invoke('delete_backup', { name: email });
@@ -29,15 +31,21 @@ export const useUserManagement = create<UserStoreState & UserStoreActions>()((se
       const accounts = await AccountCommands.getAccounts();
       set({ users: accounts });
 
-      logger.info('用户删除成功', { email, module: 'UserManagement' });
+      logger.info('用户删除成功', { module: 'UserManagement', email, remainingUsers: accounts.length });
     } catch (error) {
-      logger.error('用户删除失败', { email, error: error instanceof Error ? error.message : String(error), module: 'UserManagement' });
+      logger.error('用户删除失败', {
+        module: 'UserManagement',
+        email,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   },
 
 
   addCurrentUser: async (): Promise<void> => {
+    logger.info('开始备份当前用户', { module: 'UserManagement' });
+
     try {
       // 1. 获取当前 Antigravity 用户信息
       const currentInfo = await invoke<AntigravityCurrentUserInfo>('get_current_antigravity_info');
@@ -47,7 +55,12 @@ export const useUserManagement = create<UserStoreState & UserStoreActions>()((se
         // 3. 从认证信息中提取邮箱
         const userEmail = currentInfo.email;
 
-        logger.info('开始备份当前用户', { email: userEmail, module: 'UserManagement' });
+        logger.info('检测到已登录用户，开始备份', {
+          module: 'UserManagement',
+          email: userEmail,
+          hasApiKey: !!currentInfo.apiKey,
+          hasUserStatus: !!currentInfo.userStatusProtoBinaryBase64
+        });
 
         // 4. 执行备份操作
         const result = await invoke<BackupCurrentAccountResult>('backup_antigravity_current_account', {
@@ -61,29 +74,45 @@ export const useUserManagement = create<UserStoreState & UserStoreActions>()((se
         const accounts = await AccountCommands.getAccounts();
         set({ users: accounts });
 
-        logger.info('当前用户备份成功', { email: userEmail, module: 'UserManagement' });
+        logger.info('当前用户备份成功', {
+          module: 'UserManagement',
+          email: userEmail,
+          result,
+          totalUsers: accounts.length
+        });
       } else {
-        logger.warn('未检测到已登录的用户', { hasApiKey: !!currentInfo.apiKey, hasUserStatus: !!currentInfo.userStatusProtoBinaryBase64, module: 'UserManagement' });
+        logger.warn('未检测到已登录的用户', {
+          module: 'UserManagement',
+          hasApiKey: !!currentInfo.apiKey,
+          hasUserStatus: !!currentInfo.userStatusProtoBinaryBase64
+        });
         throw new Error('未检测到已登录的用户');
       }
     } catch (error) {
-      logger.error('备份当前用户失败', { error: error instanceof Error ? error.message : String(error), module: 'UserManagement' });
+      logger.error('备份当前用户失败', {
+        module: 'UserManagement',
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   },
 
   switchUser: async (email: string): Promise<void> => {
-    try {
-      logger.info('开始切换用户', { email, module: 'UserManagement' });
+    logger.info('开始切换用户', { module: 'UserManagement', email });
 
+    try {
       // 调用后端切换用户命令
       const result = await invoke<string>('switch_to_antigravity_account', {
         accountName: email
       });
 
-      logger.info('切换用户成功', { email, result, module: 'UserManagement' });
+      logger.info('切换用户成功', { module: 'UserManagement', email, result });
     } catch (error) {
-      logger.error('切换用户失败', { email, error: error instanceof Error ? error.message : String(error), module: 'UserManagement' });
+      logger.error('切换用户失败', {
+        module: 'UserManagement',
+        email,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   },
@@ -98,9 +127,9 @@ export const useUserManagement = create<UserStoreState & UserStoreActions>()((se
   // ============ 批量操作 ============
 
   clearAllUsers: async (): Promise<void> => {
-    try {
-      logger.info('开始清空所有用户', { module: 'UserManagement' });
+    logger.info('开始清空所有用户', { module: 'UserManagement' });
 
+    try {
       // 调用清空所有备份的命令
       await invoke<string>('clear_all_backups');
 
@@ -108,15 +137,20 @@ export const useUserManagement = create<UserStoreState & UserStoreActions>()((se
       const accounts = await AccountCommands.getAccounts();
       set({ users: accounts });
 
-      logger.info('清空所有用户成功', { module: 'UserManagement' });
+      logger.info('清空所有用户成功', { module: 'UserManagement', clearedCount: accounts.length });
     } catch (error) {
-      logger.error('清空所有用户失败', { error: error instanceof Error ? error.message : String(error), module: 'UserManagement' });
+      logger.error('清空所有用户失败', {
+        module: 'UserManagement',
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   },
 
   // ============ 查询 ============
   getUsers: async (): Promise<AntigravityAccount[]> => {
+    logger.info('获取用户列表', { module: 'UserManagement' });
+
     try {
       // 从后端获取账户列表
       const accounts = await AccountCommands.getAccounts();
@@ -124,10 +158,13 @@ export const useUserManagement = create<UserStoreState & UserStoreActions>()((se
       // 同步更新 store 中的状态
       set({ users: accounts });
 
-      logger.info('获取用户列表成功', { userCount: accounts.length, module: 'UserManagement' });
+      logger.info('获取用户列表成功', { module: 'UserManagement', userCount: accounts.length });
       return accounts;
     } catch (error) {
-      logger.error('获取用户列表失败', { error: error instanceof Error ? error.message : String(error), module: 'UserManagement' });
+      logger.error('获取用户列表失败', {
+        module: 'UserManagement',
+        error: error instanceof Error ? error.message : String(error)
+      });
       // 如果读取失败，返回当前 store 中的用户
       return get().users;
     }

@@ -15,6 +15,7 @@ import { BaseSpinner } from '@/components/base-ui/BaseSpinner';
 import { SystemTrayService } from '../../services/system-tray-service';
 import { SilentStartService } from '../../services/silent-start-service';
 import { cn } from '@/utils/utils';
+import { logger } from '@/utils/logger';
 
 interface BusinessSettingsDialogProps {
   isOpen: boolean;
@@ -59,7 +60,11 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       const version = await getVersion();
       setAppVersion(version);
     } catch (error) {
-      console.error('获取版本号失败:', error);
+      logger.error('获取版本号失败', {
+        module: 'SettingsDialog',
+        action: 'get_version_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   };
 
@@ -87,7 +92,11 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       setDataPath(finalDataPath || '未设置');
       setExecPath(finalExecPath || '未设置');
     } catch (error) {
-      console.error('加载路径失败:', error);
+      logger.error('加载路径失败', {
+        module: 'SettingsDialog',
+        action: 'load_paths_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       setDataPath('加载失败');
       setExecPath('加载失败');
     } finally {
@@ -101,7 +110,11 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       const dbMonitoringEnabled = await invoke<boolean>('is_db_monitoring_enabled');
       setIsDbMonitoringEnabled(dbMonitoringEnabled);
     } catch (error) {
-      console.error('加载设置失败:', error);
+      logger.error('加载设置失败', {
+        module: 'SettingsDialog',
+        action: 'load_settings_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       setIsDbMonitoringEnabled(true);
     } finally {
       setIsSettingsLoading(false);
@@ -123,7 +136,11 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       const trayEnabled = await SystemTrayService.getSystemTrayState();
       setIsSystemTrayEnabled(trayEnabled);
     } catch (error) {
-      console.error('加载系统托盘设置失败:', error);
+      logger.error('加载系统托盘设置失败', {
+        module: 'SettingsDialog',
+        action: 'load_tray_settings_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       setIsSystemTrayEnabled(false);
     }
   };
@@ -146,7 +163,11 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       const silentStartEnabled = await SilentStartService.getSilentStartState();
       setIsSilentStartEnabled(silentStartEnabled);
     } catch (error) {
-      console.error('加载静默启动设置失败:', error);
+      logger.error('加载静默启动设置失败', {
+        module: 'SettingsDialog',
+        action: 'load_silent_start_settings_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       setIsSilentStartEnabled(false);
     }
   };

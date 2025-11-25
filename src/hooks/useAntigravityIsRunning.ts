@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { ProcessCommands } from '@/commands/ProcessCommands';
+import { logger } from '../utils/logger';
 
 // 状态接口
 interface AntigravityIsRunningState {
@@ -60,7 +61,11 @@ export const useAntigravityIsRunning = create<
         isChecking: false,
       });
     } catch (error) {
-      console.error('[AntigravityIsRunning] 检查状态失败:', error);
+      logger.error('检查状态失败', {
+        module: 'AntigravityIsRunning',
+        action: 'check_status_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       // 检查失败时假设未运行
       set({
         isRunning: false,
@@ -85,7 +90,11 @@ export const useAntigravityIsRunning = create<
       get().checkStatus();
     }, CHECK_INTERVAL);
 
-    console.log('[AntigravityIsRunning] 已启动自动检查（间隔 10 秒）');
+    logger.info('已启动自动检查', {
+        module: 'AntigravityIsRunning',
+        action: 'start_auto_check',
+        interval: CHECK_INTERVAL
+      });
   },
 
   // 停止自动检查
@@ -93,7 +102,10 @@ export const useAntigravityIsRunning = create<
     if (checkIntervalId !== null) {
       clearInterval(checkIntervalId);
       checkIntervalId = null;
-      console.log('[AntigravityIsRunning] 已停止自动检查');
+      logger.info('已停止自动检查', {
+        module: 'AntigravityIsRunning',
+        action: 'stop_auto_check'
+      });
     }
   },
 }));

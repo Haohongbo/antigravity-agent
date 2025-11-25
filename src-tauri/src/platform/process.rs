@@ -51,7 +51,7 @@ pub fn kill_antigravity_processes() -> Result<String, String> {
 
 /// 检查 Antigravity 进程是否正在运行（使用 sysinfo）
 pub fn is_antigravity_running() -> bool {
-    tracing::info!("🔍 检查 Antigravity 进程是否运行");
+    tracing::debug!("🔍 检查 Antigravity 进程是否运行");
 
     let mut system = sysinfo::System::new_all();
     system.refresh_all();
@@ -63,12 +63,12 @@ pub fn is_antigravity_running() -> bool {
         let process_cmd = process.cmd().join(" ");
 
         if matches_antigravity_process(process_name, &process_cmd, &process_patterns) {
-            tracing::info!("✅ 发现运行中的 Antigravity 进程: {} (PID: {})", process_name, pid);
+            tracing::debug!("✅ 发现运行中的 Antigravity 进程: {} (PID: {})", process_name, pid);
             return true;
         }
     }
 
-    tracing::info!("ℹ️ 未发现运行中的 Antigravity 进程");
+    tracing::debug!("ℹ️ 未发现运行中的 Antigravity 进程");
     false
 }
 

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { AntigravityPathInfo, AntigravityExecutableInfo, CurrentPaths } from '../types/tauri';
+import { logger } from '../utils/logger';
 
 /**
  * Antigravity 路径服务
@@ -14,7 +15,11 @@ export class AntigravityPathService {
             const result = await invoke<AntigravityPathInfo>('detect_antigravity_installation');
             return result;
         } catch (error) {
-            console.error('检测 Antigravity 路径失败:', error);
+            logger.error('检测 Antigravity 路径失败', {
+                module: 'AntigravityPathService',
+                action: 'detect_path_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             throw new Error(`检测失败: ${error}`);
         }
     }
@@ -28,7 +33,11 @@ export class AntigravityPathService {
             const isValid = await invoke<boolean>('validate_antigravity_path', { path });
             return isValid;
         } catch (error) {
-            console.error('验证路径失败:', error);
+            logger.error('验证路径失败', {
+                module: 'AntigravityPathService',
+                action: 'validate_path_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             return false;
         }
     }
@@ -42,7 +51,11 @@ export class AntigravityPathService {
             const result = await invoke<string>('save_antigravity_path', { path });
             return result;
         } catch (error) {
-            console.error('保存路径失败:', error);
+            logger.error('保存路径失败', {
+                module: 'AntigravityPathService',
+                action: 'save_path_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             throw new Error(`保存失败: ${error}`);
         }
     }
@@ -55,7 +68,11 @@ export class AntigravityPathService {
             const result = await invoke<AntigravityExecutableInfo>('detect_antigravity_executable');
             return result;
         } catch (error) {
-            console.error('检测 Antigravity 可执行文件失败:', error);
+            logger.error('检测 Antigravity 可执行文件失败', {
+                module: 'AntigravityPathService',
+                action: 'detect_executable_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             throw new Error(`检测失败: ${error}`);
         }
     }
@@ -68,7 +85,11 @@ export class AntigravityPathService {
             const isValid = await invoke<boolean>('validate_antigravity_executable', { path });
             return isValid;
         } catch (error) {
-            console.error('验证可执行文件路径失败:', error);
+            logger.error('验证可执行文件路径失败', {
+                module: 'AntigravityPathService',
+                action: 'validate_executable_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             return false;
         }
     }
@@ -81,7 +102,11 @@ export class AntigravityPathService {
             const result = await invoke<string>('save_antigravity_executable', { path });
             return result;
         } catch (error) {
-            console.error('保存可执行文件路径失败:', error);
+            logger.error('保存可执行文件路径失败', {
+                module: 'AntigravityPathService',
+                action: 'save_executable_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             throw new Error(`保存失败: ${error}`);
         }
     }
@@ -94,7 +119,11 @@ export class AntigravityPathService {
             const result = await invoke<CurrentPaths>('get_current_paths');
             return result;
         } catch (error) {
-            console.error('获取当前路径失败:', error);
+            logger.error('获取当前路径失败', {
+                module: 'AntigravityPathService',
+                action: 'get_current_paths_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             throw new Error(`获取失败: ${error}`);
         }
     }

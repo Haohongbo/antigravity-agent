@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { SystemTrayService, SystemTrayStatus } from '../services/system-tray-service';
+import { logger } from '../utils/logger';
 
 interface UseSystemTrayOptions {
   /** 状态变化时的回调函数 */
@@ -104,11 +105,19 @@ export function useSystemTray(options: UseSystemTrayOptions = {}): UseSystemTray
       setEnabled(result.enabled);
       onStatusChange?.(result.enabled, result.message);
 
-      console.log('系统托盘切换结果:', result);
+      logger.info('系统托盘切换结果', {
+        module: 'SystemTray',
+        action: 'toggle_result',
+        result: result
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
       setError(`切换系统托盘失败: ${errorMessage}`);
-      console.error('系统托盘切换失败:', error);
+      logger.error('系统托盘切换失败', {
+        module: 'SystemTray',
+        action: 'toggle_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
     } finally {
       setIsLoading(false);
       isOperatingRef.current = false;

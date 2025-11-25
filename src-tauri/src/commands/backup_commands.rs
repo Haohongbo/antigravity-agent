@@ -236,11 +236,11 @@ pub async fn collect_backup_contents(
                         });
                     }
                     Err(e) => {
-                        println!("⚠️ 跳过损坏的备份文件 {}: {}", filename, e);
+                        tracing::warn!(target: "backup::scan", filename = %filename, error = %e, "跳过损坏的备份文件");
                     }
                 },
                 Err(_) => {
-                    println!("⚠️ 跳过无法读取的文件: {}", filename);
+                    tracing::warn!(target: "backup::scan", filename = %filename, "跳过无法读取的文件");
                 }
             }
         }

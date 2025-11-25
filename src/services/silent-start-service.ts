@@ -5,6 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { logger } from '../utils/logger';
 
 export interface SilentStartStatus {
   enabled: boolean;
@@ -22,7 +23,11 @@ export class SilentStartService {
     try {
       return await invoke<boolean>('is_silent_start_enabled');
     } catch (error) {
-      console.warn('获取静默启动状态失败，使用默认值:', error);
+      logger.warn('获取静默启动状态失败，使用默认值', {
+        module: 'SilentStartService',
+        action: 'get_state_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       return false; // 默认不启用
     }
   }
@@ -55,7 +60,11 @@ export class SilentStartService {
       const allSettings = await invoke<any>('get_all_settings');
       return allSettings.silent_start_enabled || false;
     } catch (error) {
-      console.warn('从完整设置获取静默启动状态失败:', error);
+      logger.warn('从完整设置获取静默启动状态失败', {
+        module: 'SilentStartService',
+        action: 'get_from_all_settings_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       return false;
     }
   }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AntigravityPathService } from '../services/antigravity-path-service';
+import { logger } from '../utils/logger';
 
 interface AntigravityPathDialogProps {
     isOpen: boolean;
@@ -48,7 +49,11 @@ const AntigravityPathDialog: React.FC<AntigravityPathDialogProps> = ({
                 }
             }
         } catch (error) {
-            console.error('选择数据目录失败:', error);
+            logger.error('选择数据目录失败', {
+                module: 'AntigravityPathDialog',
+                action: 'browse_data_path_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             setErrorMessage(`选择失败: ${error}`);
         }
     };
@@ -79,7 +84,11 @@ const AntigravityPathDialog: React.FC<AntigravityPathDialogProps> = ({
                 }
             }
         } catch (error) {
-            console.error('选择可执行文件失败:', error);
+            logger.error('选择可执行文件失败', {
+                module: 'AntigravityPathDialog',
+                action: 'browse_exec_path_failed',
+                error: error instanceof Error ? error.message : String(error)
+              });
             setErrorMessage(`选择失败: ${error}`);
         }
     };

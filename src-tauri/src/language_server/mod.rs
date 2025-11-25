@@ -1,5 +1,7 @@
 pub mod commands;
 pub mod utils;
+pub mod cache;
+pub mod types;
 #[cfg(target_os = "windows")]
 pub mod windows;
 #[cfg(target_os = "linux")]

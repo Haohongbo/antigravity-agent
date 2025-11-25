@@ -5,6 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { logger } from '../utils/logger';
 
 export interface SystemTrayStatus {
   enabled: boolean;
@@ -29,7 +30,11 @@ export class SystemTrayService {
     try {
       return await invoke<boolean>('get_system_tray_state');
     } catch (error) {
-      console.warn('获取系统托盘状态失败，使用默认值:', error);
+      logger.warn('获取系统托盘状态失败，使用默认值', {
+        module: 'SystemTrayService',
+        action: 'get_state_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       return true; // 默认启用
     }
   }
@@ -75,7 +80,11 @@ export class SystemTrayService {
     try {
       return await invoke<SystemTrayFullStatus>('get_system_tray_status');
     } catch (error) {
-      console.warn('获取系统托盘完整状态失败:', error);
+      logger.warn('获取系统托盘完整状态失败', {
+        module: 'SystemTrayService',
+        action: 'get_full_status_failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
       return {
         runtime_enabled: false,
         tray_exists: false,

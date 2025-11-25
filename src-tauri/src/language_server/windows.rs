@@ -5,8 +5,8 @@ use regex::Regex;
 use std::mem::{size_of, zeroed};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Memory::{
-    VirtualQueryEx, MEM_COMMIT, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE,
-    PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS, PAGE_PROTECTION_FLAGS, PAGE_READONLY,
+    VirtualQueryEx, MEM_COMMIT, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READWRITE,
+    PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS, PAGE_PROTECTION_FLAGS,
     PAGE_READWRITE, PAGE_WRITECOPY,
 };
 use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
@@ -20,10 +20,8 @@ fn is_readable(protect: PAGE_PROTECTION_FLAGS) -> bool {
     }
     matches!(
         p,
-        PAGE_READONLY
-            | PAGE_READWRITE
+        PAGE_READWRITE
             | PAGE_WRITECOPY
-            | PAGE_EXECUTE_READ
             | PAGE_EXECUTE_READWRITE
             | PAGE_EXECUTE_WRITECOPY
     )

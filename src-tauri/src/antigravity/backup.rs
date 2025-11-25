@@ -56,15 +56,14 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
             .unwrap_or(None);
 
         if let Some(v) = val {
-            println!("  📦 备份字段: {}", key);
             data_map.insert(key.to_string(), Value::String(v));
         } else {
-            println!("  ℹ️ 字段不存在: {} (跳过)", key);
+            tracing::debug!(target: "backup::database", key = %key, "字段不存在，跳过");
         }
     }
 
     // 1.5. 提取所有通知相关字段（避免历史通知重复弹窗）
-    println!("  🔔 检查通知相关字段...");
+    tracing::debug!(target: "backup::database", "检查通知相关字段");
     let notification_keys: Vec<String> = conn
         .prepare("SELECT key FROM ItemTable WHERE key LIKE 'antigravity.notification.%'")
         .map_err(|e| e.to_string())?
@@ -74,7 +73,7 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
         .map_err(|e| e.to_string())?;
 
     if !notification_keys.is_empty() {
-        println!("  📬 发现 {} 个通知字段，开始备份...", notification_keys.len());
+        tracing::debug!(target: "backup::database", notification_count = %notification_keys.len(), "发现通知字段，开始备份");
         for notification_key in &notification_keys {
             let val: Option<String> = conn
                 .query_row("SELECT value FROM ItemTable WHERE key = ?", [notification_key], |row| {
@@ -84,7 +83,7 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
                 .unwrap_or(None);
 
             if let Some(v) = val {
-                println!("  📦 备份通知: {}", notification_key);
+                tracing::debug!(target: "backup::database", key = %notification_key, "备份通知字段");
                 data_map.insert(notification_key.clone(), Value::String(v));
             }
         }
@@ -95,7 +94,7 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
             Value::Array(notification_keys.into_iter().map(Value::String).collect()),
         );
     } else {
-        println!("  ℹ️ 未发现通知字段");
+        tracing::debug!(target: "backup::database", "未发现通知字段");
     }
 
     // 2. 提取并解析 Marker（作为恢复时的参考书）
@@ -114,7 +113,7 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
     if let Some(m) = marker_json {
         // 将 Marker 解析为对象存入备份
         if let Ok(parsed_marker) = serde_json::from_str::<Value>(&m) {
-            println!("  📋 备份完整 Marker（作为恢复参考）");
+            tracing::debug!(target: "backup::database", "备份完整 Marker（作为恢复参考）");
             data_map.insert(database::TARGET_STORAGE_MARKER.to_string(), parsed_marker);
         }
     }
@@ -135,6 +134,6 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
     fs::write(&backup_file, file_content).map_err(|e| e.to_string())?;
 
     let action = if is_overwrite { "覆盖" } else { "创建" };
-    println!("✅ 备份成功 ({}): {}", action, backup_file.display());
+    tracing::info!(target: "backup::database", action = %action, file = %backup_file.display(), "备份成功");
     Ok((backup_name, is_overwrite))
 }

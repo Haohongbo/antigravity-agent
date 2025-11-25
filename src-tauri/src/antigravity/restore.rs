@@ -17,7 +17,7 @@ fn get_marker_flag_from_backup(backup_marker: &Option<&Value>, key: &str) -> i32
         if let Some(marker_obj) = marker_val.as_object() {
             if let Some(flag) = marker_obj.get(key) {
                 if let Some(i) = flag.as_i64() {
-                    println!("  📖 从备份 Marker 读取 {} = {}", key, i);
+                    tracing::debug!(target: "restore::marker", key = %key, value = %i, "从备份 Marker 读取值");
                     return i as i32;
                 }
             }
@@ -32,10 +32,7 @@ fn get_marker_flag_from_backup(backup_marker: &Option<&Value>, key: &str) -> i32
         | database::COMMAND_CONFIGS => 0,
         _ => 1,
     };
-    println!(
-        "  ⚠️ 备份中没有 {} 的 Marker 信息，使用默认值: {}",
-        key, default
-    );
+    tracing::warn!(target: "restore::marker", key = %key, default_value = %default, "备份中没有 Marker 信息，使用默认值");
     default
 }
 
@@ -60,7 +57,7 @@ fn restore_database(
     db_name: &str,
     backup_data: &Value,
 ) -> Result<usize, String> {
-    println!("🔄 恢复数据库: {}", db_name);
+    tracing::info!(target: "restore::database", db_name = %db_name, "开始恢复数据库");
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
     // 使用常量定义需要恢复的字段列表（与备份列表一致）
@@ -78,7 +75,7 @@ fn restore_database(
                     params![key, val_str],
                 ) {
                     Ok(_) => {
-                        println!("  ✅ 注入数据: {}", key);
+                        tracing::debug!(target: "restore::database", key = %key, "注入数据成功");
                         restored_count += 1;
                         // 只有非特殊字段才需要在 Marker 中注册
                         if key != &database::NEW_STORAGE_MARKER {
@@ -86,14 +83,14 @@ fn restore_database(
                         }
                     }
                     Err(e) => {
-                        println!("  ⚠️ 写入 {} 失败: {}", key, e);
+                        tracing::error!(target: "restore::database", key = %key, error = %e, "写入数据失败");
                     }
                 }
             } else {
-                println!("  ⚠️ 字段 {} 不是字符串类型，跳过", key);
+                tracing::warn!(target: "restore::database", key = %key, "字段不是字符串类型，跳过");
             }
         } else {
-            println!("  ℹ️ 备份中未找到: {} (跳过)", key);
+            tracing::debug!(target: "restore::database", key = %key, "备份中未找到字段，跳过");
         }
     }
 
@@ -101,7 +98,7 @@ fn restore_database(
     if let Some(notification_keys_value) = backup_data.get("notification_keys") {
         if let Some(notification_keys) = notification_keys_value.as_array() {
             if !notification_keys.is_empty() {
-                println!("  📬 开始恢复 {} 个通知字段...", notification_keys.len());
+                tracing::debug!(target: "restore::database", notification_count = %notification_keys.len(), "开始恢复通知字段");
                 let mut notification_count = 0;
 
                 for notification_key_value in notification_keys {
@@ -114,12 +111,12 @@ fn restore_database(
                                     params![notification_key, notification_str],
                                 ) {
                                     Ok(_) => {
-                                        println!("  ✅ 恢复通知: {}", notification_key);
+                                        tracing::debug!(target: "restore::database", key = %notification_key, "恢复通知成功");
                                         notification_count += 1;
                                         // 通知字段不添加到 restored_keys 中，因为它们通常不需要参与 Marker 同步
                                     }
                                     Err(e) => {
-                                        println!("  ⚠️ 恢复通知失败 {}: {}", notification_key, e);
+                                        tracing::error!(target: "restore::database", key = %notification_key, error = %e, "恢复通知失败");
                                     }
                                 }
                             }
@@ -127,14 +124,14 @@ fn restore_database(
                     }
                 }
 
-                println!("  ✅ 成功恢复 {} 个通知字段", notification_count);
+                tracing::info!(target: "restore::database", notification_count = %notification_count, "成功恢复通知字段");
             }
         }
     }
 
     // 3. 智能合并 Marker
     if !restored_keys.is_empty() {
-        println!("  🔧 开始智能合并 Marker...");
+        tracing::debug!(target: "restore::marker", "开始智能合并 Marker");
 
         // A. 读取当前数据库的 Marker
         let current_marker_str: Option<String> = conn
@@ -151,26 +148,23 @@ fn restore_database(
 
         let mut current_marker_obj = match current_marker_str {
             Some(s) => {
-                println!("  📋 读取到现有 Marker");
+                tracing::debug!(target: "restore::marker", "读取到现有 Marker");
                 serde_json::from_str::<serde_json::Map<String, Value>>(&s).unwrap_or_default()
             }
             None => {
-                println!("  ℹ️ 未找到现有 Marker，创建新的");
+                tracing::debug!(target: "restore::marker", "未找到现有 Marker，创建新的");
                 serde_json::Map::new()
             }
         };
 
-        println!(
-            "  📊 合并前 Marker 包含 {} 个字段",
-            current_marker_obj.len()
-        );
+        tracing::debug!(target: "restore::marker", marker_fields_before = %current_marker_obj.len(), "合并前 Marker 状态");
 
         // B. 获取备份文件中的 Marker（作为参考源）
         let backup_marker = backup_data.get("__$__targetStorageMarker");
         if backup_marker.is_some() {
-            println!("  📖 从备份文件中读取到完整 Marker，将使用其中的值作为参考");
+            tracing::debug!(target: "restore::marker", "从备份文件中读取到完整 Marker，将使用其中的值作为参考");
         } else {
-            println!("  ⚠️ 备份文件中没有 Marker，将使用默认值");
+            tracing::warn!(target: "restore::marker", "备份文件中没有 Marker，将使用默认值");
         }
 
         // C. 将已恢复 Key 的 Marker 状态合并进去
@@ -180,10 +174,7 @@ fn restore_database(
             current_marker_obj.insert(key.to_string(), json!(flag));
         }
 
-        println!(
-            "  📊 合并后 Marker 包含 {} 个字段",
-            current_marker_obj.len()
-        );
+        tracing::debug!(target: "restore::marker", marker_fields_after = %current_marker_obj.len(), "合并后 Marker 状态");
 
         // D. 写回 Marker
         let new_marker_str = serde_json::to_string(&current_marker_obj)
@@ -198,16 +189,16 @@ fn restore_database(
         )
         .map_err(|e| format!("更新 Marker 失败: {}", e))?;
 
-        println!("  ✅ Marker 已智能合并（使用备份中的精确值）");
+        tracing::info!(target: "restore::marker", "Marker 已智能合并（使用备份中的精确值）");
 
         // E. 重置上传时间戳（防止 Sync 冲突）
         let _ = conn.execute(
             "INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('antigravityAnalytics.lastUploadTime', '0')",
             []
         );
-        println!("  ✅ 已重置分析时间戳");
+        tracing::debug!(target: "restore::marker", "已重置分析时间戳");
     } else {
-        println!("  ⚠️ 未恢复任何数据，跳过 Marker 更新");
+        tracing::warn!(target: "restore::marker", "未恢复任何数据，跳过 Marker 更新");
     }
 
     Ok(restored_count)
