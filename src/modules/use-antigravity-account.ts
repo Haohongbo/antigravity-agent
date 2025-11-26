@@ -4,23 +4,25 @@ import {logger} from '../utils/logger.ts';
 import type {AntigravityCurrentUserInfo, BackupCurrentAccountResult} from '../types/tauri.ts';
 import {AccountCommands} from '@/commands/AccountCommands.ts';
 import type {AntigravityAccount, AntigravityAuthInfo} from '@/commands/types/account.types.ts';
+import {BackupCommands} from "@/commands/BackupCommands.ts";
 
 // 常量定义
 const FILE_WRITE_DELAY_MS = 500; // 等待文件写入完成的延迟时间
 
 // Store 状态
-export interface UserStoreState {
+export interface AntigravityAccountState {
   users: AntigravityAccount[];
+  currentAuthInfo: AntigravityAuthInfo | null;
   isLoading: boolean;
 }
 
 // Store Actions
-export interface UserStoreActions {
+export interface AntigravityAccountActions {
   // 基础操作
   delete: (email: string) => Promise<void>;
   insertOrUpdateCurrent: () => Promise<void>;
   switchUser: (email: string) => Promise<void>;
-  getCurrentUser: () => Promise<AntigravityAuthInfo | null>;
+  updateCurrentAccount: () => Promise<AntigravityAuthInfo | null>;
 
   // 批量操作
   clearAllUsers: () => Promise<void>;
@@ -31,10 +33,11 @@ export interface UserStoreActions {
 }
 
 // 创建 Store
-export const useAntigravityAccount = create<UserStoreState & UserStoreActions>()((set, get) => ({
+export const useAntigravityAccount = create<AntigravityAccountState & AntigravityAccountActions>()((set, get) => ({
   // 初始状态
   users: [],
   isLoading: false,
+  currentAuthInfo: null,
 
   // ============ 基础操作 ============
   delete: async (email: string): Promise<void> => {
@@ -133,54 +136,22 @@ export const useAntigravityAccount = create<UserStoreState & UserStoreActions>()
     }
   },
 
-  getCurrentUser: async (): Promise<AntigravityAuthInfo> => {
-    logger.info('开始获取当前用户', { module: 'UserManagement' });
+  updateCurrentAccount: async (): Promise<AntigravityAuthInfo | null> => {
+    const currentInfo = await AccountCommands.getCurrentInfo();
 
-    try {
-      // 复用已封装的 AccountCommands
-      const currentInfo = await AccountCommands.getCurrentInfo();
+    set({ currentAuthInfo: currentInfo });
 
-      // 直接检查 email 字段
-      if (currentInfo) {
-        logger.info('成功获取当前用户', {
-          module: 'UserManagement',
-          email: currentInfo.email
-        });
-        return currentInfo;
-      }
-
-      logger.warn('未找到当前登录用户', { module: 'UserManagement' });
-      return null;
-    } catch (error) {
-      logger.error('获取当前用户失败', {
-        module: 'UserManagement',
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return null;
-    }
+    return currentInfo;
   },
 
   // ============ 批量操作 ============
 
   clearAllUsers: async (): Promise<void> => {
-    logger.info('开始清空所有用户', { module: 'UserManagement' });
-
-    try {
-      // 调用清空所有备份的命令
-      await invoke<string>('clear_all_backups');
-
-      // 清空成功后重新获取数据
-      const accounts = await AccountCommands.getAccounts();
-      set({ users: accounts });
-
-      logger.info('清空所有用户成功', { module: 'UserManagement', clearedCount: accounts.length });
-    } catch (error) {
-      logger.error('清空所有用户失败', {
-        module: 'UserManagement',
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
+    // 调用清空所有备份的命令
+    await BackupCommands.clearAll();
+    // 清空成功后重新获取数据
+    const accounts = await AccountCommands.getAccounts();
+    set({ users: accounts });
   },
 
   // ============ 查询 ============
@@ -215,3 +186,5 @@ export const useAntigravityAccount = create<UserStoreState & UserStoreActions>()
     );
   },
 }));
+
+export const useCurrentAntigravityAccount: () => AntigravityAccount | undefined = () => useAntigravityAccount(state => state.users.find(user => user.email === state.currentAuthInfo?.email));

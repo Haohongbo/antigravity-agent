@@ -151,18 +151,12 @@ const BusinessUserDetail: React.FC<BusinessUserDetailProps> = ({
 
         <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
           {/* 用户头像和基本信息 */}
-          <div className="flex items-center gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt={user.name}
-                className="h-16 w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-800"
-              />
-            ) : (
-              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-semibold">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-            )}
+          <div className="flex items-center gap-4">
+            <img
+              src={avatarUrl}
+              alt={user.name}
+              className="h-16 w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-800"
+            />
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {user.name}
@@ -173,84 +167,45 @@ const BusinessUserDetail: React.FC<BusinessUserDetailProps> = ({
             </div>
           </div>
 
-          {/* 基本信息 */}
-          <div className="space-y-4">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">基本信息</h4>
+          <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
-            <div className="space-y-3">
-              <InfoItem
-                icon={<User className="h-4 w-4 text-blue-500" />}
-                label="账户名称"
-                value={user.name}
-                copyable
-                fieldName="name"
-              />
-
-              <InfoItem
-                icon={<User className="h-4 w-4 text-green-500" />}
-                label="邮箱地址"
-                value={user.email}
-                copyable
-                fieldName="email"
-              />
-            </div>
-          </div>
+          <InfoItem
+            icon={<Key className="h-4 w-4 text-orange-500" />}
+            label="API 密钥"
+            value={user.api_key}
+            copyable
+            fieldName="api_key"
+          />
 
           <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
-          {/* 技术信息 */}
-          <div className="space-y-4">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">技术信息</h4>
+          <div className="space-y-3">
+            <InfoItem
+              icon={<Calendar className="h-4 w-4 text-indigo-500" />}
+              label="创建时间"
+              value={`${formatDateTime(user.created_at)} (${getRelativeTime(user.created_at)})`}
+              fieldName="created_at"
+            />
 
-            <div className="space-y-3">
-              <InfoItem
-                icon={<Key className="h-4 w-4 text-orange-500" />}
-                label="API 密钥"
-                value={user.api_key}
-                copyable
-                fieldName="api_key"
-              />
-            </div>
-          </div>
-
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
-
-          {/* 时间信息 */}
-          <div className="space-y-4">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">时间信息</h4>
-
-            <div className="space-y-3">
-              <InfoItem
-                icon={<Calendar className="h-4 w-4 text-indigo-500" />}
-                label="创建时间"
-                value={`${formatDateTime(user.created_at)} (${getRelativeTime(user.created_at)})`}
-                fieldName="created_at"
-              />
-
-              <InfoItem
-                icon={<Clock className="h-4 w-4 text-cyan-500" />}
-                label="最后切换"
-                value={`${formatDateTime(user.last_switched)} (${getRelativeTime(user.last_switched)})`}
-                fieldName="last_switched"
-              />
-            </div>
+            <InfoItem
+              icon={<Clock className="h-4 w-4 text-cyan-500" />}
+              label="最后切换"
+              value={`${formatDateTime(user.last_switched)} (${getRelativeTime(user.last_switched)})`}
+              fieldName="last_switched"
+            />
           </div>
 
           <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
           {/* 用户设置 */}
-          <div className="space-y-4">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">用户设置</h4>
-
-            <InfoItem
-              icon={<Settings className="h-4 w-4 text-gray-500" />}
-              label="设置数据"
-              value={user.user_settings}
-              copyable
-              fieldName="user_settings"
-              isMultiline
-            />
-          </div>
+          <InfoItem
+            icon={<Settings className="h-4 w-4 text-gray-500" />}
+            label="设置数据"
+            value={user.user_settings}
+            copyable
+            fieldName="user_settings"
+            isMultiline
+          />
         </div>
       </BaseDialogContent>
     </BaseDialog>

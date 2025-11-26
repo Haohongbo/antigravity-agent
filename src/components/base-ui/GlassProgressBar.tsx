@@ -37,6 +37,7 @@ export const GlassProgressBar: React.FC<GlassProgressBarProps> = ({
     gradientTo = 'to-cyan-400',
     label,
     labelClassName,
+    height,
 }) => {
     // Ensure value is between 0 and 1
     const clampedValue = Math.min(Math.max(value, 0), 1);
@@ -46,6 +47,7 @@ export const GlassProgressBar: React.FC<GlassProgressBarProps> = ({
         <div
             className={cn(
                 "relative w-[240px] overflow-hidden rounded-full",
+                height || "h-2", // Apply height prop or default
                 "bg-gray-100/80 dark:bg-gray-800/80", // Track background - slightly more opaque for text readability
                 "border border-white/20 dark:border-white/10", // Subtle border
                 "backdrop-blur-md", // Stronger blur

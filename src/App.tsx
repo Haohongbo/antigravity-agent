@@ -2,139 +2,14 @@ import React, {useCallback, useEffect, useState} from 'react';
 import {useDevToolsShortcut} from './hooks/useDevToolsShortcut';
 import {useAntigravityAccount} from './modules/use-antigravity-account.ts';
 import {DATABASE_EVENTS, useDbMonitoringStore} from './modules/db-monitoring-store';
-import useConfigManager from './modules/config-management/useConfigStore';
-import {useAntigravityProcess} from './hooks/use-antigravity-process';
 import {useAntigravityIsRunning} from './hooks/useAntigravityIsRunning';
-import toast, {Toaster} from 'react-hot-toast';
-import Toolbar from './components/Toolbar';
-import BusinessSettingsDialog from './components/business/SettingsDialog';
-import PasswordDialog from './components/PasswordDialog';
+import {Toaster} from 'react-hot-toast';
+import AppToolbar from './AppToolbar.tsx';
 import {TooltipProvider} from './components/ui/tooltip';
 import {AntigravityPathService} from './services/antigravity-path-service';
 import {useLanguageServerState} from "@/hooks/use-language-server-state.ts";
 import {logger} from './utils/logger';
 import {AppUserPanel} from "@/AppUserPanel.tsx";
-
-function AppContent() {
-  // ========== 应用状态 ==========
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  const [passwordDialog, setPasswordDialog] = useState({
-    isOpen: false,
-    title: '',
-    description: '',
-    requireConfirmation: false,
-    onSubmit: () => {},
-    validatePassword: null as (password: string) => { isValid: boolean; message?: string },
-  });
-
-  // 打开密码对话框
-  const showPasswordDialog = useCallback((config) => {
-    setPasswordDialog({
-      isOpen: true,
-      title: config.title,
-      description: config.description || '',
-      requireConfirmation: config.requireConfirmation || false,
-      onSubmit: config.onSubmit,
-      validatePassword: config.validatePassword
-    });
-  }, []);
-
-  // 关闭密码对话框
-  const closePasswordDialog = useCallback(() => {
-    setPasswordDialog(prev => ({ ...prev, isOpen: false }));
-  }, []);
-
-  // 处理密码对话框取消
-  const handlePasswordDialogCancel = useCallback(() => {
-    closePasswordDialog();
-    toast.error('操作已取消');
-  }, [closePasswordDialog]);
-
-
-  // 配置管理
-  const {isImporting, isExporting, isCheckingData, importConfig, exportConfig} = useConfigManager(
-    showPasswordDialog,
-    closePasswordDialog
-  );
-
-  // 进程管理
-  const {isProcessLoading, backupAndRestartAntigravity} = useAntigravityProcess();
-
-  // 合并 loading 状态
-  const loadingState = {
-    isProcessLoading: isProcessLoading,
-    isImporting,
-    isExporting
-  };
-
-  return (
-    <>
-      <Toolbar
-        onImport={importConfig}
-        onExport={exportConfig}
-        isCheckingData={isCheckingData}
-        onBackupAndRestart={backupAndRestartAntigravity}
-        loadingState={loadingState}
-        onSettingsClick={() => setIsSettingsOpen(true)}
-      />
-
-      <div className="container">
-        <AppUserPanel/>
-      </div>
-
-      <Toaster
-        position="bottom-right"
-        reverseOrder={false}
-        toastOptions={{
-          style: {
-            background: '#363636',
-            color: '#fff',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            fontSize: '14px',
-            border: 'none',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-          },
-          success: {
-            duration: 3000,
-            iconTheme: {
-              primary: '#10b981',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            duration: 4000,
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
-
-      <PasswordDialog
-        isOpen={passwordDialog.isOpen}
-        title={passwordDialog.title}
-        description={passwordDialog.description}
-        requireConfirmation={passwordDialog.requireConfirmation}
-        onSubmit={passwordDialog.onSubmit}
-        onCancel={handlePasswordDialogCancel}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) {
-            closePasswordDialog();
-          }
-        }}
-        validatePassword={passwordDialog.validatePassword}
-      />
-
-      <BusinessSettingsDialog
-        isOpen={isSettingsOpen}
-        onOpenChange={setIsSettingsOpen}
-      />
-    </>
-  );
-}
 
 function App() {
   // ========== 应用状态 ==========
@@ -240,9 +115,18 @@ function App() {
     return <div>请先运行 Antigravity</div>
   }
 
-  return <TooltipProvider>
-    <AppContent/>
-  </TooltipProvider>;
+  return <>
+    <TooltipProvider>
+      <AppToolbar/>
+      <div className="container">
+        <AppUserPanel/>
+      </div>
+    </TooltipProvider>
+    <Toaster
+      position="bottom-right"
+      reverseOrder={false}
+    />
+  </>;
 }
 
 export default App;

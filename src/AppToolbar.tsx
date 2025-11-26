@@ -1,50 +1,73 @@
-import React, {useMemo, useState} from 'react';
+import React, {useCallback, useState} from 'react';
 import {Download, Play, Plus, Square, Upload} from 'lucide-react';
-import BusinessUpdateDialog from './business/UpdateDialog';
-import BusinessConfirmDialog from './business/ConfirmDialog';
-import BusinessActionButton from './business/ActionButton';
-import {TooltipProvider} from './ui/tooltip';
-import ToolbarTitle from './ui/toolbar-title';
-import {useUpdateChecker} from '../hooks/useUpdateChecker';
+import BusinessUpdateDialog from './components/business/UpdateDialog.tsx';
+import BusinessConfirmDialog from './components/business/ConfirmDialog.tsx';
+import BusinessActionButton from './components/business/ActionButton.tsx';
+import ToolbarTitle from './components/ui/toolbar-title.tsx';
+import {useUpdateChecker} from './hooks/useUpdateChecker.ts';
 import {useAntigravityAccount} from '@/modules/use-antigravity-account.ts';
-import {useAntigravityIsRunning} from '@/hooks/useAntigravityIsRunning';
-import {logger} from '../utils/logger';
+import {useAntigravityIsRunning} from '@/hooks/useAntigravityIsRunning.ts';
+import {logger} from './utils/logger.ts';
 import toast from 'react-hot-toast';
+import {useImportExportAccount} from "@/modules/use-import-export-accounts.ts";
+import {useAntigravityProcess} from "@/hooks/use-antigravity-process.ts";
+import PasswordDialog from "@/components/PasswordDialog.tsx";
+import BusinessSettingsDialog from "@/components/business/SettingsDialog.tsx";
 
-interface LoadingState {
-  isProcessLoading: boolean;
-  isImporting: boolean;
-  isExporting: boolean;
-}
+const AppToolbar = () => {
 
-interface ToolbarProps {
-  // 配置管理
-  onImport: () => void;
-  onExport: () => void;
-  // hasUserData 移除了，现在从内部 store 获取
-  isCheckingData: boolean;
+  // ========== 应用状态 ==========
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // 进程管理（登录新账户）
-  onBackupAndRestart: () => void;
+  const [passwordDialog, setPasswordDialog] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    requireConfirmation: false,
+    onSubmit: () => {
+    },
+    validatePassword: null as (password: string) => { isValid: boolean; message?: string },
+  });
 
-  // 状态
-  loadingState: LoadingState;
+  const antigravityAccount = useAntigravityAccount();
 
-  // 设置
-  onSettingsClick?: () => void;
-}
+  // 打开密码对话框
+  const showPasswordDialog = (config) => {
+    setPasswordDialog({
+      isOpen: true,
+      title: config.title,
+      description: config.description || '',
+      requireConfirmation: config.requireConfirmation || false,
+      onSubmit: config.onSubmit,
+      validatePassword: config.validatePassword
+    })
+  };
 
-const Toolbar: React.FC<ToolbarProps> = ({
-  onImport,
-  onExport,
-  // hasUserData 移除了，现在内部从 store 获取
-  isCheckingData,
-  onBackupAndRestart,
-  loadingState = { isProcessLoading: false, isImporting: false, isExporting: false },
-  onSettingsClick
-}) => {
-  const {users} = useAntigravityAccount();
-  
+  // 关闭密码对话框
+  const closePasswordDialog = useCallback(() => {
+    setPasswordDialog(prev => ({...prev, isOpen: false}));
+  }, []);
+
+  // 处理密码对话框取消
+  const handlePasswordDialogCancel = useCallback(() => {
+    closePasswordDialog();
+    toast.error('操作已取消');
+  }, [closePasswordDialog]);
+
+  const importExportAccount = useImportExportAccount();
+
+  // 包装方法以刷新用户列表
+  const handleImportConfig = () => {
+    importExportAccount.importConfig(showPasswordDialog, closePasswordDialog)
+      .then(() => {
+
+      })
+  };
+  const handleExportConfig = () => importExportAccount.exportConfig(showPasswordDialog, closePasswordDialog);
+
+  // 进程管理
+  const {isProcessLoading, backupAndRestartAntigravity} = useAntigravityProcess();
+
   // Antigravity 进程状态
   const isRunning = useAntigravityIsRunning((state) => state.isRunning);
 
@@ -65,7 +88,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   // 处理登录新账户按钮点击
   const handleBackupAndRestartClick = () => {
     logger.info('用户点击登录新账户按钮，显示确认对话框', {
-      module: 'Toolbar',
+      module: 'AppToolbar',
       action: 'backup_and_restart_click'
     });
 
@@ -84,11 +107,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
 注意：系统将自动启动 Antigravity，请确保已保存所有重要工作`,
       onConfirm: async () => {
         logger.info('用户确认登录新账户操作', {
-        module: 'Toolbar',
+          module: 'AppToolbar',
         action: 'backup_and_restart_confirmed'
       });
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        onBackupAndRestart();
+        backupAndRestartAntigravity();
       }
     });
   };
@@ -120,7 +143,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
     } catch (error) {
       // 只在控制台打印错误，不提示用户
       logger.error('下载失败', {
-        module: 'Toolbar',
+        module: 'AppToolbar',
         action: 'download_update_failed',
         error: error instanceof Error ? error.message : String(error)
       });
@@ -136,7 +159,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
     } catch (error) {
       // 只在控制台打印错误，不提示用户
       logger.error('安装失败', {
-        module: 'Toolbar',
+        module: 'AppToolbar',
         action: 'install_update_failed',
         error: error instanceof Error ? error.message : String(error)
       });
@@ -144,14 +167,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
   };
 
   // 计算全局加载状态
-  const isAnyLoading = useMemo(() => {
-    return loadingState.isProcessLoading ||
-      loadingState.isImporting ||
-        loadingState.isExporting;
-  }, [loadingState]);
+  const isAnyLoading = isProcessLoading ||
+    importExportAccount.isImporting ||
+    importExportAccount.isExporting;
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <>
       <div className="toolbar bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 backdrop-blur-sm shadow-sm">
         <div className="toolbar-content max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -183,7 +204,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 variant="default"
                 icon={<Plus className="h-4 w-4" />}
                 tooltip="关闭 Antigravity，备份当前用户，清除用户信息，并自动重新启动"
-                isLoading={loadingState.isProcessLoading}
+                isLoading={isProcessLoading}
                 loadingText="处理中..."
                 isAnyLoading={isAnyLoading}
               >
@@ -191,11 +212,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
               </BusinessActionButton>
 
               <BusinessActionButton
-                onClick={onImport}
+                onClick={handleImportConfig}
                 variant="secondary"
                 icon={<Upload className="h-4 w-4" />}
                 tooltip="导入加密的配置文件"
-                isLoading={loadingState.isImporting}
+                isLoading={importExportAccount.isImporting}
                 loadingText="导入中..."
                 isAnyLoading={isAnyLoading}
               >
@@ -203,31 +224,31 @@ const Toolbar: React.FC<ToolbarProps> = ({
               </BusinessActionButton>
 
               <BusinessActionButton
-                onClick={onExport}
+                onClick={handleExportConfig}
                 variant="secondary"
                 icon={<Download className="h-4 w-4" />}
-                tooltip={users.length > 0 ? "导出为加密配置文件" : "没有用户信息可以导出"}
-                disabled={users.length === 0}
-                isLoading={loadingState.isExporting || isCheckingData}
-                loadingText={isCheckingData ? "检查中..." : "导出中..."}
+                tooltip={antigravityAccount.users.length > 0 ? "导出为加密配置文件" : "没有用户信息可以导出"}
+                disabled={antigravityAccount.users.length === 0}
+                isLoading={importExportAccount.isExporting || importExportAccount.isCheckingData}
+                loadingText={importExportAccount.isCheckingData ? "检查中..." : "导出中..."}
                 isAnyLoading={isAnyLoading}
               >
                 导出
               </BusinessActionButton>
 
               {/* 设置按钮 */}
-              {onSettingsClick && (
-                <button
-                  onClick={onSettingsClick}
-                  className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                  title="设置"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-              )}
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="设置"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -246,7 +267,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => {
           logger.info('用户取消了登录新账户操作', {
-        module: 'Toolbar',
+            module: 'AppToolbar',
         action: 'backup_and_restart_cancelled'
       });
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
@@ -269,8 +290,28 @@ const Toolbar: React.FC<ToolbarProps> = ({
           setIsUpdateDialogOpen(false);
         }}
       />
-    </TooltipProvider>
+
+      <PasswordDialog
+        isOpen={passwordDialog.isOpen}
+        title={passwordDialog.title}
+        description={passwordDialog.description}
+        requireConfirmation={passwordDialog.requireConfirmation}
+        onSubmit={passwordDialog.onSubmit}
+        onCancel={handlePasswordDialogCancel}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            closePasswordDialog();
+          }
+        }}
+        validatePassword={passwordDialog.validatePassword}
+      />
+
+      <BusinessSettingsDialog
+        isOpen={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+      />
+    </>
   );
 };
 
-export default Toolbar;
+export default AppToolbar;

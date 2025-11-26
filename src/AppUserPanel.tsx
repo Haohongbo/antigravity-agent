@@ -1,21 +1,25 @@
-import React, {useCallback, useEffect, useState} from "react";
-import type {AntigravityAccount} from "@/commands/types/account.types.ts";
+import React, { useCallback, useEffect, useState } from "react";
+import type { AntigravityAccount } from "@/commands/types/account.types.ts";
 import BusinessUserDetail from "@/components/business/UserDetail.tsx";
-import {useAntigravityAccount} from "@/modules/use-antigravity-account.ts";
-import {useLanguageServerUserInfo} from "@/modules/use-language-server-user-info";
-import {useLanguageServerState} from "@/hooks/use-language-server-state.ts";
-import {BaseTooltip} from "@/components/base-ui/BaseTooltip.tsx";
+import { useAntigravityAccount, useCurrentAntigravityAccount } from "@/modules/use-antigravity-account.ts";
+import { useLanguageServerUserInfo } from "@/modules/use-language-server-user-info";
+import { useLanguageServerState } from "@/hooks/use-language-server-state.ts";
+import { BaseTooltip } from "@/components/base-ui/BaseTooltip.tsx";
 import BusinessActionButton from "@/components/business/ActionButton.tsx";
-import {Trash2} from "lucide-react";
-import {maskBackupFilename} from "@/utils/username-masking.ts";
-import {GlassProgressBar} from "@/components/base-ui/GlassProgressBar.tsx";
-import {BaseButton} from "@/components/base-ui/BaseButton.tsx";
+import { Trash2 } from "lucide-react";
+
 import BusinessConfirmDialog from "@/components/business/ConfirmDialog.tsx";
 import toast from 'react-hot-toast';
+import { QuotaDashboard } from "@/components/business/QuotaDashboard";
+import { UserListItem } from "@/components/business/UserListItem.tsx";
 
 export function AppUserPanel() {
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AntigravityAccount | null>(null);
+  const antigravityAccount = useAntigravityAccount();
+  const languageServerUserInfo = useLanguageServerUserInfo();
+  const { isLanguageServerStateInitialized } = useLanguageServerState();
+  const currentAntigravityAccount = useCurrentAntigravityAccount();
 
   // 用户详情处理
   const handleUserClick = useCallback((user: AntigravityAccount) => {
@@ -28,11 +32,6 @@ export function AppUserPanel() {
     setSelectedUser(null);
   }, []);
 
-  const antigravityAccount = useAntigravityAccount();
-  // email
-  const [currentUser, setCurrentUser] = useState<string>(null);
-  const languageServerUserInfo = useLanguageServerUserInfo();
-  const {isLanguageServerStateInitialized} = useLanguageServerState();
 
   // 组件挂载时获取用户列表
   useEffect(() => {
@@ -54,30 +53,19 @@ export function AppUserPanel() {
         languageServerUserInfo.fetchData(user)
       })
     }
-    antigravityAccount.getCurrentUser()
-      .then(user => {
-        setCurrentUser(user.email)
-      })
+    antigravityAccount.updateCurrentAccount()
   }, [antigravityAccount.users, isLanguageServerStateInitialized]);
+
+  // 获取当前用户的配额数据
+  const currentQuotaData = currentAntigravityAccount && languageServerUserInfo.users[currentAntigravityAccount?.id]
+    ? languageServerUserInfo.users[currentAntigravityAccount.id].userStatus.cascadeModelConfigData.clientModelConfigs
+    : [];
 
   const [isClearDialogOpen, setIsClearDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [backupToDelete, setBackupToDelete] = useState<string | null>(null);
 
-  // 解码 Base64 头像
-  const getAvatarUrl = (base64Url: string) => {
-    try {
-      // 如果已经是完整URL，直接返回
-      if (base64Url.startsWith('http') || base64Url.startsWith('data:')) {
-        return base64Url;
-      }
-      // 如果是 Base64 编码，尝试解码
-      return atob(base64Url);
-    } catch (error) {
-      // 解码失败，返回空字符串
-      return '';
-    }
-  };
+
 
   const handleDeleteBackup = (backupName: string) => {
     setBackupToDelete(backupName);
@@ -142,77 +130,26 @@ export function AppUserPanel() {
             </BaseTooltip>
           )}
         </div>
+
+        {/* 配额仪表盘 */}
+        {currentQuotaData.length > 0 && (
+          <QuotaDashboard models={currentQuotaData} />
+        )}
+
         <div className={antigravityAccount.users.length === 0 ? "backup-list-empty" : "backup-list-vertical"}>
           {antigravityAccount.users.length === 0 ? (
             <p className="text-light-text-muted">暂无用户</p>
           ) : (
-            antigravityAccount.users.map((user, index) => {
-              const avatarUrl = getAvatarUrl(user.profile_url);
-              return (
-                <div
-                  key={`${user.email}-${index}`}
-                  className="backup-item-vertical cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors group"
-                  onClick={() => handleUserClick(user)}
-                  title="点击查看用户详情"
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0 pr-3">
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt={user.name}
-                        className="h-6 w-6 rounded-full object-cover border border-gray-200 dark:border-gray-700 group-hover:border-blue-400 dark:group-hover:border-blue-600 transition-colors flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <BaseTooltip content={user.email} side="bottom" className="flex-1 min-w-0">
-                    <span className="backup-name text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                      {maskBackupFilename(user.email)}
-                    </span>
-                    </BaseTooltip>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0 items-center">
-                    {
-                      currentUser === user.email && languageServerUserInfo.users[user.id] && <div className={"flex flex-col flex-wrap gap-1"}>
-                        {languageServerUserInfo.users[user.id].userStatus.cascadeModelConfigData.clientModelConfigs.map((model) => {
-                          return <GlassProgressBar
-                            key={model.label}
-                            value={1 - model.quotaInfo.remainingFraction}
-                            gradientFrom="from-purple-500"
-                            gradientTo="to-pink-500"
-                            label={model.label}
-                            className={"h-5"}
-                          />
-                        })}
-                      </div>
-                    }
-                    <BaseTooltip content="切换到此用户并自动启动 Antigravity" side="bottom">
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <BusinessActionButton
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleSwitchAccount(user.email)}
-                          loadingText="切换中..."
-                        >
-                          切换
-                        </BusinessActionButton>
-                      </div>
-                    </BaseTooltip>
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <BaseButton
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteBackup(user.email)}
-                      >
-                        删除
-                      </BaseButton>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
+            antigravityAccount.users.map((user, index) => (
+              <UserListItem
+                key={`${user.email}-${index}`}
+                user={user}
+                isCurrent={currentAntigravityAccount?.email === user.email}
+                onSelect={handleUserClick}
+                onSwitch={handleSwitchAccount}
+                onDelete={handleDeleteBackup}
+              />
+            ))
           )}
         </div>
       </section>

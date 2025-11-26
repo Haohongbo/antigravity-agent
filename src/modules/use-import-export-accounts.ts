@@ -7,15 +7,11 @@ import {create} from 'zustand';
 import {open, save} from '@tauri-apps/plugin-dialog';
 import {readFile} from '@tauri-apps/plugin-fs';
 import {invoke} from '@tauri-apps/api/core';
-import {logger} from '../../utils/logger';
-// AntigravityService 导入移除了，现在使用 user-management store
-
-// 内部类型定义 (不导出)
-interface BackupData {
-  filename: string;
-  content: any;
-  timestamp: number;
-}
+import {logger} from '@/utils/logger.ts';
+import toast from 'react-hot-toast';
+import {BackupCommands} from "@/commands/BackupCommands.ts";
+import {BackupData} from "@/commands/types/backup.types.ts";
+import {LoggingCommands} from "@/commands/LoggingCommands.ts";
 
 interface EncryptedConfigData {
   version: string;
@@ -56,7 +52,7 @@ interface ConfigActions {
 }
 
 // 创建 Zustand Store
-export const useConfigStore = create<ConfigState & ConfigActions>()(
+export const useImportExportAccount = create<ConfigState & ConfigActions>()(
   (set, get) => ({
     // 初始状态
     isImporting: false,
@@ -76,7 +72,7 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
       showPasswordDialog: (config: PasswordDialogConfig) => void,
       closePasswordDialog: () => void
     ): Promise<void> => {
-      logger.info('开始导入配置文件', { module: 'ConfigManager' });
+      logger.info('开始导入配置文件', { module: 'useImportExportAccount' });
 
       try {
         // 选择文件
@@ -84,7 +80,7 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
           title: '选择配置文件',
           filters: [
             {
-              name: 'Antigravity 加密配置文件',
+              name: '加密配置文件',
               extensions: ['enc']
             },
             {
@@ -97,14 +93,14 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
 
         if (!selected || typeof selected !== 'string') {
           logger.warn('未选择文件', {
-            module: 'ConfigManager'
+            module: 'useImportExportAccount'
           });
-          showStatus('未选择文件', true);
+          toast.error('未选择文件');
           return;
         }
 
         logger.info('已选择文件', {
-          module: 'ConfigManager',
+          module: 'useImportExportAccount',
           filePath: selected
         });
 
@@ -114,9 +110,9 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
 
         if (fileContent.length === 0) {
           logger.warn('文件内容为空', {
-            module: 'ConfigManager'
+            module: 'useImportExportAccount'
           });
-          showStatus('文件内容为空', true);
+          toast.error('文件内容为空');
           return;
         }
 
@@ -134,7 +130,7 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
             try {
               closePasswordDialog();
               set({ isImporting: true });
-              showStatus('正在解密配置文件...');
+              toast.loading('正在解密配置文件...', {duration: 1});
 
               // 解密配置数据 - 使用后端解密
               const decryptedJson: string = await invoke('decrypt_config_data', {
@@ -149,43 +145,36 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
               }
 
               logger.info('开始恢复备份数据', {
-                module: 'ConfigManager',
+                module: 'useImportExportAccount',
                 backupCount: configData.backups.length
               });
-              showStatus('正在恢复账户数据...');
+              toast.loading('正在恢复账户数据...', {duration: 1});
 
-              // ✅ 调用后端恢复备份文件
-              interface RestoreResult {
-                restoredCount: number;  // 后端使用 #[serde(rename = "restoredCount")]
-                failed: Array<{ filename: string; error: string }>;
-              }
-              const result = await invoke<RestoreResult>('restore_backup_files', {
-                backups: configData.backups
-              });
+              const result = await BackupCommands.restoreFiles(configData.backups);
 
               if (result.failed.length > 0) {
                 logger.warn('部分文件恢复失败', {
-                  module: 'ConfigManager',
+                  module: 'useImportExportAccount',
                   restoredCount: result.restoredCount,
                   failedCount: result.failed.length,
                   failedFiles: result.failed
                 });
-                showStatus(`配置文件导入成功，已恢复 ${result.restoredCount} 个账户，${result.failed.length} 个失败`);
+                toast.success(`配置文件导入成功，已恢复 ${result.restoredCount} 个账户，${result.failed.length} 个失败`);
               } else {
                 logger.info('所有文件恢复成功', {
-                  module: 'ConfigManager',
+                  module: 'useImportExportAccount',
                   restoredCount: result.restoredCount
                 });
-                showStatus(`配置文件导入成功，已恢复 ${result.restoredCount} 个账户`);
+                toast.success(`配置文件导入成功，已恢复 ${result.restoredCount} 个账户`);
               }
-
+debugger
             } catch (error) {
               logger.error('解密失败', {
-                module: 'ConfigManager',
+                module: 'useImportExportAccount',
                 stage: 'import_password_validation',
                 error: error instanceof Error ? error.message : String(error)
               });
-              showStatus(`配置文件解密失败: ${error instanceof Error ? error.message : String(error)}`, true);
+              toast.error(`配置文件解密失败: ${error instanceof Error ? error.message : String(error)}`);
             } finally {
               set({ isImporting: false });
             }
@@ -193,13 +182,13 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
         });
 
       } catch (error) {
-      logger.error('文件操作失败', {
-        module: 'ConfigManager',
-        stage: 'file_operation',
-        error: error instanceof Error ? error.message : String(error)
-      });
-      showStatus(`文件操作失败: ${error instanceof Error ? error.message : String(error)}`, true);
-    }
+        logger.error('文件操作失败', {
+          module: 'useImportExportAccount',
+          stage: 'file_operation',
+          error: error instanceof Error ? error.message : String(error)
+        });
+        toast.error(`文件操作失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
     },
 
     // ============ 导出配置 ============
@@ -207,24 +196,24 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
       showPasswordDialog: (config: PasswordDialogConfig) => void,
       closePasswordDialog: () => void
     ): Promise<void> => {
-      logger.info('开始导出配置', { module: 'ConfigManager' });
+      logger.info('开始导出配置', { module: 'useImportExportAccount' });
 
       try {
-        showStatus('正在收集账户数据...');
+        toast.loading('正在收集账户数据...');
 
         // ✅ 获取包含完整内容的备份数据
         const backupsWithContent = await invoke<BackupData[]>('collect_backup_contents');
 
         if (backupsWithContent.length === 0) {
           logger.warn('没有找到用户信息', {
-            module: 'ConfigManager'
+            module: 'useImportExportAccount'
           });
-          showStatus('没有找到任何用户信息，无法导出配置文件', true);
+          toast.error('没有找到任何用户信息，无法导出配置文件');
           return;
         }
 
         logger.info('找到备份数据', {
-          module: 'ConfigManager',
+          module: 'useImportExportAccount',
           backupCount: backupsWithContent.length
         });
 
@@ -242,7 +231,7 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
             try {
               closePasswordDialog();
               set({ isExporting: true });
-              showStatus('正在生成加密配置文件...');
+              toast.loading('正在生成加密配置文件...');
 
               // ✅ 构建配置数据（包含完整内容）
               const configData: EncryptedConfigData = {
@@ -256,7 +245,7 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
               const configSize = new Blob([configJson]).size;
 
               logger.info('配置数据已生成', {
-                module: 'ConfigManager',
+                module: 'useImportExportAccount',
                 backupCount: backupsWithContent.length,
                 configSize
               });
@@ -283,21 +272,18 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
 
               if (!savePath || typeof savePath !== 'string') {
                 logger.warn('未选择保存位置', {
-                  module: 'ConfigManager'
+                  module: 'useImportExportAccount'
                 });
-                showStatus('未选择保存位置', true);
+                toast.error('未选择保存位置');
                 return;
               }
 
               // 保存加密文件
-              await invoke('write_text_file', {
-                path: savePath,
-                content: encryptedData
-              });
+              await LoggingCommands.writeTextFile(savePath, encryptedData);
 
-              showStatus(`配置文件已保存: ${savePath}`);
+              toast.success(`配置文件已保存: ${savePath}`);
               logger.info('导出配置成功', {
-                module: 'ConfigManager',
+                module: 'useImportExportAccount',
                 savePath,
                 backupCount: backupsWithContent.length,
                 configSize
@@ -305,11 +291,11 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
 
             } catch (error) {
               logger.error('导出失败', {
-                module: 'ConfigManager',
+                module: 'useImportExportAccount',
                 stage: 'password_validation',
                 error: error instanceof Error ? error.message : String(error)
               });
-              showStatus(`导出配置文件失败: ${error instanceof Error ? error.message : String(error)}`, true);
+              toast.error(`导出配置文件失败: ${error instanceof Error ? error.message : String(error)}`);
             } finally {
               set({ isExporting: false });
             }
@@ -317,49 +303,13 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
         });
 
       } catch (error) {
-      logger.error('检查数据失败', {
-        module: 'ConfigManager',
-        stage: 'data_collection',
-        error: error instanceof Error ? error.message : String(error)
-      });
-      showStatus(`检查数据失败: ${error instanceof Error ? error.message : String(error)}`, true);
-    }
+        logger.error('检查数据失败', {
+          module: 'useImportExportAccount',
+          stage: 'data_collection',
+          error: error instanceof Error ? error.message : String(error)
+        });
+        toast.error(`检查数据失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
     },
   })
 );
-
-/**
- * 配置管理 Hook
- * 提供与原 useConfigManager 相同的接口，但基于 useConfigStore
- */
-export function useConfigManager(
-  showPasswordDialog: (config: PasswordDialogConfig) => void,
-  closePasswordDialog: () => void
-) {
-  const {
-    isImporting,
-    isExporting,
-    // hasUserData 移除了，现在由 user-management store 管理
-    isCheckingData,
-    importConfig,
-    exportConfig,
-  } = useConfigStore();
-
-  // checkUserData 相关逻辑移除了，现在由 user-management store 管理
-
-  // 包装方法以传递必要的参数
-  const handleImportConfig = () => importConfig(showPasswordDialog, closePasswordDialog);
-  const handleExportConfig = () => exportConfig(showPasswordDialog, closePasswordDialog);
-
-  return {
-    isImporting,
-    isExporting,
-    // hasUserData 移除了，现在由 user-management store 管理
-    isCheckingData,
-    importConfig: handleImportConfig,
-    exportConfig: handleExportConfig,
-  };
-}
-
-// 默认导出
-export default useConfigManager;

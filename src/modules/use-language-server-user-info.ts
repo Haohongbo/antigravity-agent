@@ -4,6 +4,7 @@ import type {AntigravityAccount} from "@/commands/types/account.types.ts";
 import {LanguageServerCommands} from "@/commands/LanguageServerCommands.ts";
 
 type State = {
+  // id -> 用户状态
   users: Record<string, LanguageServerResponse.Root>
 }
 
