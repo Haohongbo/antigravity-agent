@@ -75,9 +75,9 @@ jobs:
             arch: aarch64
             runs-on: macos-13
             target: aarch64-apple-darwin
-          - platform: macos-13
+          - platform: macos-latest  # Intel 构建使用 ARM runner 交叉编译
             arch: x86_64
-            runs-on: macos-13
+            runs-on: macos-latest
             target: x86_64-apple-darwin
           - platform: ubuntu-latest
             arch: x86_64
