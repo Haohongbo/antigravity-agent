@@ -42,7 +42,6 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@ladle/react": "^5.1.1",
     "@swc/plugin-emotion": "^14.0.1",
     "@tailwindcss/vite": "^4.1.17",
     "@tauri-apps/cli": "^2.9.5",
