@@ -198,7 +198,7 @@ const UpdateBadge: React.FC<UpdateBadgeProps> = ({
         <button
           type="button"
           onClick={handleUpdateBadgeClick}
-          className={cn('ml-2 inline-flex items-center', className)}
+          className={cn('ml-2 inline-flex cursor-pointer', className)}
           aria-label="Application update"
         >
           <InlineBadge

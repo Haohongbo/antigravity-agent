@@ -105,12 +105,14 @@ const AccountsListToolbar: React.FC<BusinessListToolbarProps> = ({
 
   return (
     <div className={cn(...containerClasses, className)}>
-      <a target={"_blank"} href={"https://github.com/MonchiLin/antigravity-agent"} className="text-4xl leading-none font-semibold tracking-tighter text-balance cursor-pointer">
-        <span>Antigravity</span>
-        {/* padding 修复截断 */}
-        <LineShadowText className={"pr-2 pb-1"}>Agent</LineShadowText>
+      <div>
+        <a target={"_blank"} href={"https://github.com/MonchiLin/antigravity-agent"} className="text-4xl leading-none font-semibold tracking-tighter text-balance cursor-pointer">
+          <span>Antigravity</span>
+          {/* padding 修复截断 */}
+          <LineShadowText className={"pr-2 pb-1"}>Agent</LineShadowText>
+        </a>
         <UpdateBadge/>
-      </a>
+      </div>
 
       <div className="flex items-center gap-2 shrink-0">
         <div className="inline-flex items-center w-fit rounded-full border border-slate-200 bg-slate-100 p-0.5 transition-colors hover:border-slate-300">
