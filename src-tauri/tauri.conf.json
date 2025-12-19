@@ -1,0 +1,114 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "Antigravity Agent",
+  "version": "1.5.1",
+  "identifier": "com.antigravity-agent.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
+    "category": "Utility",
+    "shortDescription": "Antigravity Account management tool",
+    "longDescription": "Antigravity Agent - Account management tool",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    },
+    "targets": [
+      "nsis",
+      "dmg",
+      "appimage",
+      "deb",
+      "app"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/MonchiLin/antigravity-agent/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDAxNjMzMzFBNTI0MDU1QzAKUldUQVZVQlNHak5qQVUwMDJ5N2orNkozRFU4WklTTlpmY0NqMDRIUVFYOXdlSFByU2poRDdTSFEK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Antigravity Agent",
+        "width": 800,
+        "height": 600,
+        "minWidth": 600,
+        "minHeight": 400,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "closable": true,
+        "skipTaskbar": false,
+        "additionalBrowserArgs": "--disable-features=msWebView2BrowserHitTransparent"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "windows": [
+            "main"
+          ],
+          "permissions": [
+            "core:default",
+            "shell:default",
+            "dialog:default",
+            "fs:default",
+            "fs:write-all",
+            "fs:allow-app-write",
+            "fs:allow-desktop-write",
+            "updater:default",
+            "updater:allow-check",
+            "updater:allow-download",
+            "updater:allow-install",
+            "process:default",
+            "process:allow-restart",
+            "core:webview:allow-internal-toggle-devtools",
+            "os:default",
+            "http:default",
+            "http:allow-fetch",
+            {
+              "identifier": "http:default",
+              "allow": [
+                {
+                  "url": "https://daily-cloudcode-pa.sandbox.googleapis.com"
+                },
+                {
+                  "url": "https://oauth2.googleapis.com/token"
+                },
+                {
+                  "url": "https://www.googleapis.com/oauth2/v2/userinfo"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
